@@ -954,15 +954,16 @@ def Xform "G1_D" (
                                                                                 }
 
                                                                                 def Xform "right_hand_thumb_2_link_1" (
-                                                                                    displayName = "right_hand_thumb_2_link"
-                                                                                    instanceable = true
-                                                                                    prepend references = @./instances.usda@</Instances/right_hand_thumb_2_link_1>
+                                                                                    prepend references = @./geometries.usd@</Geometries/right_hand_thumb_2_link>
                                                                                 )
                                                                                 {
-                                                                                    quatd xformOp:orient = (1, 0, 0, 0)
-                                                                                    double3 xformOp:scale = (1, 1, 1)
-                                                                                    double3 xformOp:translate = (0, 0, 0)
-                                                                                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                                                                                    over "right_hand_thumb_2_link" (
+                                                                                        prepend apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI"]
+                                                                                    )
+                                                                                    {
+                                                                                        uniform token physics:approximation = "convexHull"
+                                                                                        uniform token purpose = "guide"
+                                                                                    }
                                                                                 }
                                                                             }
 
@@ -978,18 +979,6 @@ def Xform "G1_D" (
                                                                                 double3 xformOp:translate = (-0.001, 0.032, 0)
                                                                                 uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                                                                             }
-                                                                        }
-
-                                                                        def Xform "right_hand_thumb_0_link_1" (
-                                                                            displayName = "right_hand_thumb_0_link"
-                                                                            instanceable = true
-                                                                            prepend references = @./instances.usda@</Instances/right_hand_thumb_0_link_1>
-                                                                        )
-                                                                        {
-                                                                            quatd xformOp:orient = (1, 0, 0, 0)
-                                                                            double3 xformOp:scale = (1, 1, 1)
-                                                                            double3 xformOp:translate = (0, 0, 0)
-                                                                            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                                                                         }
                                                                     }
 
@@ -1030,28 +1019,17 @@ def Xform "G1_D" (
                                                                             }
 
                                                                             def Xform "right_hand_middle_1_link_1" (
-                                                                                displayName = "right_hand_middle_1_link"
-                                                                                instanceable = true
-                                                                                prepend references = @./instances.usda@</Instances/right_hand_middle_1_link_1>
+                                                                                prepend references = @./geometries.usd@</Geometries/right_hand_middle_1_link>
                                                                             )
                                                                             {
-                                                                                quatd xformOp:orient = (1, 0, 0, 0)
-                                                                                double3 xformOp:scale = (1, 1, 1)
-                                                                                double3 xformOp:translate = (0, 0, 0)
-                                                                                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                                                                                over "right_hand_middle_1_link" (
+                                                                                    prepend apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI"]
+                                                                                )
+                                                                                {
+                                                                                    uniform token physics:approximation = "convexHull"
+                                                                                    uniform token purpose = "guide"
+                                                                                }
                                                                             }
-                                                                        }
-
-                                                                        def Xform "right_hand_middle_0_link_1" (
-                                                                            displayName = "right_hand_middle_0_link"
-                                                                            instanceable = true
-                                                                            prepend references = @./instances.usda@</Instances/right_hand_middle_0_link_1>
-                                                                        )
-                                                                        {
-                                                                            quatd xformOp:orient = (1, 0, 0, 0)
-                                                                            double3 xformOp:scale = (1, 1, 1)
-                                                                            double3 xformOp:translate = (0, 0, 0)
-                                                                            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                                                                         }
                                                                     }
 
@@ -1092,41 +1070,18 @@ def Xform "G1_D" (
                                                                             }
 
                                                                             def Xform "right_hand_index_1_link_1" (
-                                                                                displayName = "right_hand_index_1_link"
-                                                                                instanceable = true
-                                                                                prepend references = @./instances.usda@</Instances/right_hand_middle_1_link_1>
+                                                                                prepend references = @./geometries.usd@</Geometries/right_hand_middle_1_link>
                                                                             )
                                                                             {
-                                                                                quatd xformOp:orient = (1, 0, 0, 0)
-                                                                                double3 xformOp:scale = (1, 1, 1)
-                                                                                double3 xformOp:translate = (0, 0, 0)
-                                                                                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                                                                                over "right_hand_middle_1_link" (
+                                                                                    prepend apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI"]
+                                                                                )
+                                                                                {
+                                                                                    uniform token physics:approximation = "convexHull"
+                                                                                    uniform token purpose = "guide"
+                                                                                }
                                                                             }
                                                                         }
-
-                                                                        def Xform "right_hand_index_0_link_1" (
-                                                                            displayName = "right_hand_index_0_link"
-                                                                            instanceable = true
-                                                                            prepend references = @./instances.usda@</Instances/right_hand_middle_0_link_1>
-                                                                        )
-                                                                        {
-                                                                            quatd xformOp:orient = (1, 0, 0, 0)
-                                                                            double3 xformOp:scale = (1, 1, 1)
-                                                                            double3 xformOp:translate = (0, 0, 0)
-                                                                            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
-                                                                        }
-                                                                    }
-
-                                                                    def Xform "right_hand_palm_link_1" (
-                                                                        displayName = "right_hand_palm_link"
-                                                                        instanceable = true
-                                                                        prepend references = @./instances.usda@</Instances/right_hand_palm_link_1>
-                                                                    )
-                                                                    {
-                                                                        quatd xformOp:orient = (1, 0, 0, 0)
-                                                                        double3 xformOp:scale = (1, 1, 1)
-                                                                        double3 xformOp:translate = (0, 0, 0)
-                                                                        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                                                                     }
                                                                 }
 
