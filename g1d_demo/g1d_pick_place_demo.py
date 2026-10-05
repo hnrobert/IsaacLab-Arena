@@ -20,7 +20,12 @@ from isaaclab.app import AppLauncher
 parser = argparse.ArgumentParser(description=__doc__)
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
-app_launcher = AppLauncher(headless=args_cli.headless)
+# IsaacLab 3.0: a GUI window requires the 'kit' visualizer explicitly -
+# headless=False alone no longer opens one
+app_launcher = AppLauncher(
+    headless=args_cli.headless,
+    **({} if args_cli.headless else {"visualizer": "kit"}),
+)
 simulation_app = app_launcher.app
 
 """Now the sim is alive."""

@@ -29,9 +29,13 @@ session_exists() { tmux has-session -t "=${SESSION}" 2>/dev/null; }
 run_in_container() {
   local extra="$1"
   cd "${REPO_DIR}"
-  sg docker -c "env DISPLAY=${DESKTOP_DISPLAY} \
-    XAUTHORITY=${DESKTOP_XAUTH} \
-    ${COMPOSE} exec -T isaaclab-arena bash -lc \
+  # NOTE: docker compose exec does NOT forward the client environment,
+  # and a LOGIN shell (-l) may reset DISPLAY - so the desktop display
+  # is injected explicitly per exec and a plain -c shell is used.
+  sg docker -c "docker exec \
+    -e DISPLAY=${DESKTOP_DISPLAY} \
+    -e XAUTHORITY=${DESKTOP_XAUTH} \
+    isaaclab_arena-latest bash -c \
     'cd /workspaces/isaaclab_arena && /isaac-sim/python.sh \
      g1d_demo/g1d_pick_place_demo.py ${extra}'"
 }
