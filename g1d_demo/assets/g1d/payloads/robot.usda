@@ -1,0 +1,566 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "URDF USD Converter v0.3.2"
+    }
+    defaultPrim = "G1_D"
+    endTimeCode = 1000000
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    startTimeCode = 0
+    upAxis = "Z"
+)
+
+over "G1_D" (
+    prepend apiSchemas = ["IsaacRobotAPI"]
+)
+{
+    prepend rel isaac:physics:robotJoints = [
+        </G1_D/Physics/Left_Wheel_Joint>,
+        </G1_D/Physics/Right_Wheel_Joint>,
+        </G1_D/Physics/LZ_ot_Joint>,
+        </G1_D/Physics/LZ_mt_Joint>,
+        </G1_D/Physics/LZ_it_Joint>,
+        </G1_D/Physics/Pitching_Joint>,
+        </G1_D/Physics/Yaw_Joint>,
+        </G1_D/Physics/torso_Joint>,
+        </G1_D/Physics/logo_joint>,
+        </G1_D/Physics/head_joint>,
+        </G1_D/Physics/left_shoulder_pitch_joint>,
+        </G1_D/Physics/right_shoulder_pitch_joint>,
+        </G1_D/Physics/left_shoulder_roll_joint>,
+        </G1_D/Physics/left_shoulder_yaw_joint>,
+        </G1_D/Physics/left_elbow_joint>,
+        </G1_D/Physics/left_wrist_roll_joint>,
+        </G1_D/Physics/left_wrist_pitch_joint>,
+        </G1_D/Physics/left_wrist_yaw_joint>,
+        </G1_D/Physics/left_hand_palm_joint>,
+        </G1_D/Physics/left_hand_thumb_0_joint>,
+        </G1_D/Physics/left_hand_middle_0_joint>,
+        </G1_D/Physics/left_hand_index_0_joint>,
+        </G1_D/Physics/left_hand_thumb_1_joint>,
+        </G1_D/Physics/left_hand_thumb_2_joint>,
+        </G1_D/Physics/left_hand_middle_1_joint>,
+        </G1_D/Physics/left_hand_index_1_joint>,
+        </G1_D/Physics/right_shoulder_roll_joint>,
+        </G1_D/Physics/right_shoulder_yaw_joint>,
+        </G1_D/Physics/right_elbow_joint>,
+        </G1_D/Physics/right_wrist_roll_joint>,
+        </G1_D/Physics/right_wrist_pitch_joint>,
+        </G1_D/Physics/right_wrist_yaw_joint>,
+        </G1_D/Physics/right_hand_palm_joint>,
+        </G1_D/Physics/right_hand_thumb_0_joint>,
+        </G1_D/Physics/right_hand_middle_0_joint>,
+        </G1_D/Physics/right_hand_index_0_joint>,
+        </G1_D/Physics/right_hand_thumb_1_joint>,
+        </G1_D/Physics/right_hand_thumb_2_joint>,
+        </G1_D/Physics/right_hand_middle_1_joint>,
+        </G1_D/Physics/right_hand_index_1_joint>,
+    ]
+    prepend rel isaac:physics:robotLinks = [
+        </G1_D/Geometry/AGV_link>,
+        </G1_D/Geometry/AGV_link/Left_Wheel_Link>,
+        </G1_D/Geometry/AGV_link/RIght_Wheel_Link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/logo_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/head_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/left_shoulder_pitch_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link/left_shoulder_yaw_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link/left_shoulder_yaw_link/left_elbow_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link/left_shoulder_yaw_link/left_elbow_link/left_wrist_roll_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link/left_shoulder_yaw_link/left_elbow_link/left_wrist_roll_link/left_wrist_pitch_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link/left_shoulder_yaw_link/left_elbow_link/left_wrist_roll_link/left_wrist_pitch_link/left_wrist_yaw_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link/left_shoulder_yaw_link/left_elbow_link/left_wrist_roll_link/left_wrist_pitch_link/left_wrist_yaw_link/left_hand_palm_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link/left_shoulder_yaw_link/left_elbow_link/left_wrist_roll_link/left_wrist_pitch_link/left_wrist_yaw_link/left_hand_palm_link/left_hand_thumb_0_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link/left_shoulder_yaw_link/left_elbow_link/left_wrist_roll_link/left_wrist_pitch_link/left_wrist_yaw_link/left_hand_palm_link/left_hand_thumb_0_link/left_hand_thumb_1_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link/left_shoulder_yaw_link/left_elbow_link/left_wrist_roll_link/left_wrist_pitch_link/left_wrist_yaw_link/left_hand_palm_link/left_hand_thumb_0_link/left_hand_thumb_1_link/left_hand_thumb_2_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link/left_shoulder_yaw_link/left_elbow_link/left_wrist_roll_link/left_wrist_pitch_link/left_wrist_yaw_link/left_hand_palm_link/left_hand_middle_0_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link/left_shoulder_yaw_link/left_elbow_link/left_wrist_roll_link/left_wrist_pitch_link/left_wrist_yaw_link/left_hand_palm_link/left_hand_middle_0_link/left_hand_middle_1_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link/left_shoulder_yaw_link/left_elbow_link/left_wrist_roll_link/left_wrist_pitch_link/left_wrist_yaw_link/left_hand_palm_link/left_hand_index_0_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link/left_shoulder_yaw_link/left_elbow_link/left_wrist_roll_link/left_wrist_pitch_link/left_wrist_yaw_link/left_hand_palm_link/left_hand_index_0_link/left_hand_index_1_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/right_shoulder_pitch_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link/right_shoulder_yaw_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link/right_shoulder_yaw_link/right_elbow_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link/right_shoulder_yaw_link/right_elbow_link/right_wrist_roll_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link/right_shoulder_yaw_link/right_elbow_link/right_wrist_roll_link/right_wrist_pitch_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link/right_shoulder_yaw_link/right_elbow_link/right_wrist_roll_link/right_wrist_pitch_link/right_wrist_yaw_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link/right_shoulder_yaw_link/right_elbow_link/right_wrist_roll_link/right_wrist_pitch_link/right_wrist_yaw_link/right_hand_palm_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link/right_shoulder_yaw_link/right_elbow_link/right_wrist_roll_link/right_wrist_pitch_link/right_wrist_yaw_link/right_hand_palm_link/right_hand_thumb_0_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link/right_shoulder_yaw_link/right_elbow_link/right_wrist_roll_link/right_wrist_pitch_link/right_wrist_yaw_link/right_hand_palm_link/right_hand_thumb_0_link/right_hand_thumb_1_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link/right_shoulder_yaw_link/right_elbow_link/right_wrist_roll_link/right_wrist_pitch_link/right_wrist_yaw_link/right_hand_palm_link/right_hand_thumb_0_link/right_hand_thumb_1_link/right_hand_thumb_2_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link/right_shoulder_yaw_link/right_elbow_link/right_wrist_roll_link/right_wrist_pitch_link/right_wrist_yaw_link/right_hand_palm_link/right_hand_middle_0_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link/right_shoulder_yaw_link/right_elbow_link/right_wrist_roll_link/right_wrist_pitch_link/right_wrist_yaw_link/right_hand_palm_link/right_hand_middle_0_link/right_hand_middle_1_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link/right_shoulder_yaw_link/right_elbow_link/right_wrist_roll_link/right_wrist_pitch_link/right_wrist_yaw_link/right_hand_palm_link/right_hand_index_0_link>,
+        </G1_D/Geometry/AGV_link/LZ_ot_Link/LZ_mt_Link/LZ_it_Link/Pitching_Link/Yaw_Link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link/right_shoulder_yaw_link/right_elbow_link/right_wrist_roll_link/right_wrist_pitch_link/right_wrist_yaw_link/right_hand_palm_link/right_hand_index_0_link/right_hand_index_1_link>,
+    ]
+    token isaac:robotType = "Default"
+
+    over "Geometry"
+    {
+        over "AGV_link" (
+            prepend apiSchemas = ["IsaacLinkAPI"]
+        )
+        {
+            over "Left_Wheel_Link" (
+                prepend apiSchemas = ["IsaacLinkAPI"]
+            )
+            {
+            }
+
+            over "RIght_Wheel_Link" (
+                prepend apiSchemas = ["IsaacLinkAPI"]
+            )
+            {
+            }
+
+            over "LZ_ot_Link" (
+                prepend apiSchemas = ["IsaacLinkAPI"]
+            )
+            {
+                over "LZ_mt_Link" (
+                    prepend apiSchemas = ["IsaacLinkAPI"]
+                )
+                {
+                    over "LZ_it_Link" (
+                        prepend apiSchemas = ["IsaacLinkAPI"]
+                    )
+                    {
+                        over "Pitching_Link" (
+                            prepend apiSchemas = ["IsaacLinkAPI"]
+                        )
+                        {
+                            over "Yaw_Link" (
+                                prepend apiSchemas = ["IsaacLinkAPI"]
+                            )
+                            {
+                                over "torso_link" (
+                                    prepend apiSchemas = ["IsaacLinkAPI"]
+                                )
+                                {
+                                    over "logo_link" (
+                                        prepend apiSchemas = ["IsaacLinkAPI"]
+                                    )
+                                    {
+                                    }
+
+                                    over "head_link" (
+                                        prepend apiSchemas = ["IsaacLinkAPI"]
+                                    )
+                                    {
+                                    }
+
+                                    over "left_shoulder_pitch_link" (
+                                        prepend apiSchemas = ["IsaacLinkAPI"]
+                                    )
+                                    {
+                                        over "left_shoulder_roll_link" (
+                                            prepend apiSchemas = ["IsaacLinkAPI"]
+                                        )
+                                        {
+                                            over "left_shoulder_yaw_link" (
+                                                prepend apiSchemas = ["IsaacLinkAPI"]
+                                            )
+                                            {
+                                                over "left_elbow_link" (
+                                                    prepend apiSchemas = ["IsaacLinkAPI"]
+                                                )
+                                                {
+                                                    over "left_wrist_roll_link" (
+                                                        prepend apiSchemas = ["IsaacLinkAPI"]
+                                                    )
+                                                    {
+                                                        over "left_wrist_pitch_link" (
+                                                            prepend apiSchemas = ["IsaacLinkAPI"]
+                                                        )
+                                                        {
+                                                            over "left_wrist_yaw_link" (
+                                                                prepend apiSchemas = ["IsaacLinkAPI"]
+                                                            )
+                                                            {
+                                                                over "left_hand_palm_link" (
+                                                                    prepend apiSchemas = ["IsaacLinkAPI"]
+                                                                )
+                                                                {
+                                                                    over "left_hand_thumb_0_link" (
+                                                                        prepend apiSchemas = ["IsaacLinkAPI"]
+                                                                    )
+                                                                    {
+                                                                        over "left_hand_thumb_1_link" (
+                                                                            prepend apiSchemas = ["IsaacLinkAPI"]
+                                                                        )
+                                                                        {
+                                                                            over "left_hand_thumb_2_link" (
+                                                                                prepend apiSchemas = ["IsaacLinkAPI"]
+                                                                            )
+                                                                            {
+                                                                            }
+                                                                        }
+                                                                    }
+
+                                                                    over "left_hand_middle_0_link" (
+                                                                        prepend apiSchemas = ["IsaacLinkAPI"]
+                                                                    )
+                                                                    {
+                                                                        over "left_hand_middle_1_link" (
+                                                                            prepend apiSchemas = ["IsaacLinkAPI"]
+                                                                        )
+                                                                        {
+                                                                        }
+                                                                    }
+
+                                                                    over "left_hand_index_0_link" (
+                                                                        prepend apiSchemas = ["IsaacLinkAPI"]
+                                                                    )
+                                                                    {
+                                                                        over "left_hand_index_1_link" (
+                                                                            prepend apiSchemas = ["IsaacLinkAPI"]
+                                                                        )
+                                                                        {
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    over "right_shoulder_pitch_link" (
+                                        prepend apiSchemas = ["IsaacLinkAPI"]
+                                    )
+                                    {
+                                        over "right_shoulder_roll_link" (
+                                            prepend apiSchemas = ["IsaacLinkAPI"]
+                                        )
+                                        {
+                                            over "right_shoulder_yaw_link" (
+                                                prepend apiSchemas = ["IsaacLinkAPI"]
+                                            )
+                                            {
+                                                over "right_elbow_link" (
+                                                    prepend apiSchemas = ["IsaacLinkAPI"]
+                                                )
+                                                {
+                                                    over "right_wrist_roll_link" (
+                                                        prepend apiSchemas = ["IsaacLinkAPI"]
+                                                    )
+                                                    {
+                                                        over "right_wrist_pitch_link" (
+                                                            prepend apiSchemas = ["IsaacLinkAPI"]
+                                                        )
+                                                        {
+                                                            over "right_wrist_yaw_link" (
+                                                                prepend apiSchemas = ["IsaacLinkAPI"]
+                                                            )
+                                                            {
+                                                                over "right_hand_palm_link" (
+                                                                    prepend apiSchemas = ["IsaacLinkAPI"]
+                                                                )
+                                                                {
+                                                                    over "right_hand_thumb_0_link" (
+                                                                        prepend apiSchemas = ["IsaacLinkAPI"]
+                                                                    )
+                                                                    {
+                                                                        over "right_hand_thumb_1_link" (
+                                                                            prepend apiSchemas = ["IsaacLinkAPI"]
+                                                                        )
+                                                                        {
+                                                                            over "right_hand_thumb_2_link" (
+                                                                                prepend apiSchemas = ["IsaacLinkAPI"]
+                                                                            )
+                                                                            {
+                                                                            }
+                                                                        }
+                                                                    }
+
+                                                                    over "right_hand_middle_0_link" (
+                                                                        prepend apiSchemas = ["IsaacLinkAPI"]
+                                                                    )
+                                                                    {
+                                                                        over "right_hand_middle_1_link" (
+                                                                            prepend apiSchemas = ["IsaacLinkAPI"]
+                                                                        )
+                                                                        {
+                                                                        }
+                                                                    }
+
+                                                                    over "right_hand_index_0_link" (
+                                                                        prepend apiSchemas = ["IsaacLinkAPI"]
+                                                                    )
+                                                                    {
+                                                                        over "right_hand_index_1_link" (
+                                                                            prepend apiSchemas = ["IsaacLinkAPI"]
+                                                                        )
+                                                                        {
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    over "Physics"
+    {
+        over "Left_Wheel_Joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "Right_Wheel_Joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "LZ_ot_Joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "LZ_mt_Joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "LZ_it_Joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "Pitching_Joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "Yaw_Joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "torso_Joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "logo_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "head_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "left_shoulder_pitch_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "left_shoulder_roll_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "left_shoulder_yaw_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "left_elbow_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "left_wrist_roll_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "left_wrist_pitch_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "left_wrist_yaw_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "left_hand_palm_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "left_hand_thumb_0_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "left_hand_thumb_1_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "left_hand_thumb_2_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "left_hand_middle_0_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "left_hand_middle_1_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "left_hand_index_0_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "left_hand_index_1_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "right_shoulder_pitch_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "right_shoulder_roll_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "right_shoulder_yaw_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "right_elbow_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "right_wrist_roll_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "right_wrist_pitch_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "right_wrist_yaw_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "right_hand_palm_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "right_hand_thumb_0_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "right_hand_thumb_1_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "right_hand_thumb_2_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "right_hand_middle_0_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "right_hand_middle_1_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "right_hand_index_0_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "right_hand_index_1_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+    }
+}
+

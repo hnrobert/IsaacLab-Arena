@@ -1,0 +1,40 @@
+services:
+  isaaclab-arena:
+    image: isaaclab_arena:latest
+    container_name: isaaclab_arena-latest
+    entrypoint: ["/bin/bash", "-c", "sleep infinity"]
+    privileged: true
+    ipc: host
+    network_mode: host
+    runtime: nvidia
+    ulimits:
+      memlock: -1
+      stack: -1
+    environment:
+      # X11 on-screen visualization on the host desktop
+      DISPLAY: ${DISPLAY:-:1}
+      XAUTHORITY: ${XAUTHORITY:-/run/user/1000/gdm/Xauthority}
+      QT_X11_NO_MITSHM: "1"
+      # entrypoint.sh variables (if the stock entrypoint is ever used)
+      DOCKER_RUN_USER_NAME: ${USER_NAME:-csl}
+      DOCKER_RUN_USER_ID: ${USER_ID:-1000}
+      DOCKER_RUN_GROUP_NAME: ${GROUP_NAME:-csl}
+      DOCKER_RUN_GROUP_ID: ${GROUP_ID:-1000}
+    volumes:
+      # the repo itself (this file lives at its root)
+      - .:/workspaces/isaaclab_arena
+      # tutorial data dirs
+      - ~/datasets:/datasets
+      - ~/models:/models
+      - ~/eval:/eval
+      # X11 socket for GUI windows on the host desktop
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ${XAUTHORITY:-/run/user/1000/gdm/Xauthority}:${XAUTHORITY:-/run/user/1000/gdm/Xauthority}:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    # healthcheck omitted; `docker compose up -d` then `docker compose exec`
