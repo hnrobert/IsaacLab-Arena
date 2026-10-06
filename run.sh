@@ -40,6 +40,20 @@ run_in_container() {
      g1d_demo/g1d_pick_place_demo.py ${extra}'"
 }
 
+reap_stale_demo() {
+  # Killing the tmux session only reaps the HOST-side docker-exec
+  # client: the exec'd python inside the container keeps running and
+  # holds the GPU, so a restart would race the stale process for the
+  # device. The [.] in the pattern keeps pkill from matching its own
+  # wrapper shell's command line.
+  if sg docker -c "docker exec isaaclab_arena-latest bash -c \
+      \"pkill -9 -f 'g1d_pick_place_demo[.]py'\"" >/dev/null 2>&1; then
+    echo "Reaped a stale demo process inside the container."
+    sleep 3  # let its GPU context tear down before the next start
+  fi
+  return 0
+}
+
 mode=${1:-sim}
 case "$mode" in
 sim | headless)
@@ -47,6 +61,10 @@ sim | headless)
   cd "${REPO_DIR}"
   sg docker -c "env DISPLAY=${DESKTOP_DISPLAY} \
     XAUTHORITY=${DESKTOP_XAUTH} ${COMPOSE} up -d" >/dev/null
+
+  # kill any demo still running in the container BEFORE restarting
+  # the session (an orphaned exec survives tmux and holds the GPU)
+  reap_stale_demo
 
   if session_exists; then
     echo "Restarting tmux session '${SESSION}'..."
@@ -74,6 +92,7 @@ stop)
   tmux kill-session -t "${SESSION}" 2>/dev/null \
     && echo "Session '${SESSION}' stopped." \
     || echo "No session '${SESSION}'."
+  reap_stale_demo
   ;;
 down)
   tmux kill-session -t "${SESSION}" 2>/dev/null || true

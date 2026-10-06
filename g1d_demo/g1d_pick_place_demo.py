@@ -54,6 +54,29 @@ REPO = "/workspaces/isaaclab_arena"
 G1D_USD = os.path.join(REPO, "g1d_demo", "assets", "g1d", "g1d.usda")
 WAREHOUSE = os.path.join(REPO, "g1d_demo", "assets", "warehouse")
 
+# ---- render decimation (GUI speed) -----------------------------------
+# The warehouse kit scene is render-heavy: with per-step RTX
+# rendering the GUI runs at ~0.15x real time (a 25 s drive takes 3
+# wall-clock minutes) and the robot looks frozen between prints.
+# Physics keeps its 60 Hz; only every RENDER_EVERY-th step renders
+# (~15 fps visual). Headless never renders at all.
+RENDER_EVERY = 4
+_render_counter = 0
+
+
+def step_sim(sim) -> None:
+    """One physics step, rendering at most every RENDER_EVERY-th."""
+    global _render_counter
+    if args_cli.headless:
+        sim.step(render=False)
+        return
+    _render_counter += 1
+    if _render_counter >= RENDER_EVERY:
+        _render_counter = 0
+        sim.step(render=True)
+    else:
+        sim.step(render=False)
+
 
 def n(t):
     """Device buffer (torch OR warp array) -> numpy."""
@@ -526,7 +549,7 @@ class G1DDriver:
             if every_step is not None:
                 every_step()
             self.robot.write_data_to_sim()
-            self.sim.step()
+            step_sim(self.sim)
             self._refresh()
 
     def hold_arm(self, pose, seconds: float,
@@ -581,7 +604,7 @@ class G1DDriver:
         while waited < deadline:
             self.arm(pose)
             self.robot.write_data_to_sim()
-            self.sim.step()
+            step_sim(self.sim)
             self._refresh()
             waited += 1
             current = n(self.robot.data.joint_pos)[0]
@@ -599,7 +622,7 @@ class G1DDriver:
         while waited < deadline:
             self.fingers(pose)
             self.robot.write_data_to_sim()
-            self.sim.step()
+            step_sim(self.sim)
             self._refresh()
             waited += 1
             current = n(self.robot.data.joint_pos)[0]
@@ -637,7 +660,7 @@ class G1DDriver:
                 break
             self.wheels(0.12, 0.12)
             self.robot.write_data_to_sim()
-            self.sim.step()
+            step_sim(self.sim)
             self._refresh()
             waited += 1
         self.wheels(0.0, 0.0)
@@ -719,7 +742,7 @@ class G1DDriver:
                 print(f"drive: x={x:.3f} y={y:+.3f} dx={dx:+.3f} "
                       f"yaw={yaw:+.3f}", flush=True)
             self.robot.write_data_to_sim()
-            self.sim.step()
+            step_sim(self.sim)
             self._refresh()
             waited += 1
         self.wheels(0.0, 0.0)
@@ -756,7 +779,7 @@ class G1DDriver:
             if arm_hold is not None:
                 self.robot.set_joint_position_target(arm_hold)
             self.robot.write_data_to_sim()
-            self.sim.step()
+            step_sim(self.sim)
             self._refresh()
             waited += 1
         self.wheels(0.0, 0.0)
@@ -782,7 +805,7 @@ class G1DDriver:
                 w * HALF_TRACK / WHEEL_RADIUS,
             )
             self.robot.write_data_to_sim()
-            self.sim.step()
+            step_sim(self.sim)
             self._refresh()
             waited += 1
         self.wheels(0.0, 0.0)
@@ -826,7 +849,7 @@ def main() -> None:
     print(f"root after reset: x={x0:.3f} y={y0:.3f} yaw={yaw0:.3f}",
           flush=True)
     for _ in range(120):  # 2 s settle
-        sim.step()
+        step_sim(sim)
         scene["robot"].update(sim.get_physics_dt())
         for nm in ("tote_a", "tote_b", "tote_c"):
             scene[nm].update(sim.get_physics_dt())
