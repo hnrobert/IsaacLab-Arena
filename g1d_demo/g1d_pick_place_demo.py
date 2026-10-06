@@ -87,7 +87,7 @@ ARM_HOME = torch.tensor([0.0, 0.1, 0.0, 0.3, 0.0, 0.0, 0.0])
 # GPU-calibrated top pinch: thumb hull at (2.22, 0, 0.91) and middle
 # hull at (2.33, 0, 0.97) - a centered over-the-top squeeze, so the
 # tote just rests on a plain board (no posts, no pockets)
-ARM_GRASP = torch.tensor([-0.7, 0.0, 0.0, 0.9, -0.8, -0.60, 0.0])
+ARM_GRASP = torch.tensor([-0.7, 0.0, 0.0, 0.9, -0.8, -0.5, 0.0])
 # approach gateway: swinging straight from the tuck clips the station
 # lip, so the arm first goes UP, then pitches down onto the slot
 ARM_HIGH = torch.tensor([-1.25, 0.0, 0.0, 0.9, -0.8, -0.8, 0.0])
@@ -105,14 +105,17 @@ FINGER_CLOSE = torch.tensor([0.9, 0.8, 0.8, 0.9, 0.8, 0.9, 0.8])
 STATION_X = 2.45          # replenishment station center (near edge 2.20)
 STATION_TOP = 0.80
 PAD_POS = (-1.0, 0.0, 0.005)
-TOTE_SIZE = 0.05          # inside the hand's measured 0.02-0.09 jaw span
-TOTE_Z = 0.87 + TOTE_SIZE / 2 + 0.005  # board top + half tote
+TOTE_SIZE = 0.12          # fills the 11.7 cm thumb-to-middle gap at wrist -0.5
+TOTE_Z = 0.77 + TOTE_SIZE / 2 + 0.005  # board top + half tote
 STANDOFF_CLEAR = 1.84     # physics wall: AGV nose hits the 2.20 edge
 
+# ONE proven pick slot on the centerline (the jaw zone is only ~4 cm
+# wide); b/c are dressing on the racking. The slot refills each cycle
+# with the next tote in the rotation.
 PICK_TARGETS = (
-    ("tote_a", 2.25, 0.0, (0.9, 0.45, 0.1)),
-    ("tote_b", 2.29, 0.0, (0.1, 0.6, 0.9)),
-    ("tote_c", 2.33, 0.0, (0.2, 0.8, 0.3)),
+    ("tote_a", 2.27, 0.0, (0.9, 0.45, 0.1)),
+    ("tote_b", 2.27, 0.0, (0.1, 0.6, 0.9)),
+    ("tote_c", 2.27, 0.0, (0.2, 0.8, 0.3)),
 )
 
 # delivered totes are tidied onto these pad slots after the release.
@@ -142,7 +145,7 @@ def make_tote_cfg(name: str, pos, color):
         spawn=sim_utils.CuboidCfg(
             size=(TOTE_SIZE, TOTE_SIZE, TOTE_SIZE),
             rigid_props=sim_utils.RigidBodyPropertiesCfg(),
-            mass_props=sim_utils.MassPropertiesCfg(mass=0.4),
+            mass_props=sim_utils.MassPropertiesCfg(mass=0.15),
             collision_props=sim_utils.CollisionPropertiesCfg(),
             visual_material=sim_utils.PreviewSurfaceCfg(
                 diffuse_color=color
@@ -293,7 +296,21 @@ class G1DSceneCfg(InteractiveSceneCfg):
             visual_material=sim_utils.PreviewSurfaceCfg(
                 diffuse_color=STATION_BODY),
         ),
-        init_state=AssetBaseCfg.InitialStateCfg(pos=(2.29, 0.0, 0.85)))
+        init_state=AssetBaseCfg.InitialStateCfg(pos=(2.27, 0.0, 0.75)))
+    # small retaining pockets on the pick board: the graded close
+    # still nudges the tote; back + side walls keep it on its slot
+    pocketBB = AssetBaseCfg(
+        prim_path="{ENV_REGEX_NS}/PocketBB",
+        spawn=sim_utils.CuboidCfg(
+            size=(0.02, 0.16, 0.08), collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=RACK_BEAM)),
+        init_state=AssetBaseCfg.InitialStateCfg(pos=(2.345, 0.0, 0.81)))
+    pocketYB = AssetBaseCfg(
+        prim_path="{ENV_REGEX_NS}/PocketYB",
+        spawn=sim_utils.CuboidCfg(
+            size=(0.16, 0.02, 0.08), collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=RACK_BEAM)),
+        init_state=AssetBaseCfg.InitialStateCfg(pos=(2.27, 0.072, 0.81)))
     pad = AssetBaseCfg(
         prim_path="{ENV_REGEX_NS}/Pad",
         spawn=sim_utils.CuboidCfg(
@@ -306,11 +323,12 @@ class G1DSceneCfg(InteractiveSceneCfg):
     )
 
     # --- pick targets on the pick board ---
-    tote_a = make_tote_cfg("tote_a", (2.25, 0.0, TOTE_Z),
+    tote_a = make_tote_cfg("tote_a", (2.27, 0.0, TOTE_Z),
                            PICK_TARGETS[0][3])
-    tote_b = make_tote_cfg("tote_b", (2.29, 0.0, TOTE_Z),
+    # b/c rest on the racking as dressing
+    tote_b = make_tote_cfg("tote_b", (-2.8, 1.6, 0.85),
                            PICK_TARGETS[1][3])
-    tote_c = make_tote_cfg("tote_c", (2.33, 0.0, TOTE_Z),
+    tote_c = make_tote_cfg("tote_c", (-0.6, -1.6, 0.85),
                            PICK_TARGETS[2][3])
 
     robot = ArticulationCfg(
@@ -366,6 +384,37 @@ def disable_agv_shell_collision() -> bool:
             print(f"shell collision off: {prim.GetPath()}", flush=True)
             return True
     return False
+
+
+def add_grip_material(env_ns="/World/envs/env_0") -> None:
+    """High-friction physics material on fingertips + totes.
+
+    The pinch wraps the tote but default friction (~0.5) strips it
+    during any base motion; rubber-ish 1.6/1.4 makes the wrap hold.
+    """
+    from pxr import UsdShade, UsdPhysics as Phys
+
+    stage = omni.usd.get_context().get_stage()
+    mat = UsdShade.Material.Define(
+        stage, env_ns + "/GripMaterial")
+    Phys.MaterialAPI.Apply(mat.GetPrim())
+    pa = Phys.MaterialAPI(mat.GetPrim())
+    pa.CreateStaticFrictionAttr(1.6)
+    pa.CreateDynamicFrictionAttr(1.4)
+    pa.CreateRestitutionAttr(0.0)
+    bound = 0
+    for prim in stage.Traverse():
+        nm = prim.GetName()
+        bind = (nm in ("tote_a", "tote_b", "tote_c")
+                or (nm in ("right_hand_thumb_2_link_1",
+                           "right_hand_middle_1_link_1",
+                           "right_hand_index_1_link_1")))
+        if bind:
+            b = UsdShade.MaterialBindingAPI.Apply(prim)
+            b.Bind(mat, UsdShade.Tokens.weakerThanDescendants,
+                   "physics")
+            bound += 1
+    print(f"grip material bound to {bound} prims", flush=True)
 
 
 def yaw_of(quat) -> float:
@@ -480,16 +529,51 @@ class G1DDriver:
             self.sim.step()
             self._refresh()
 
-    def hold_arm(self, pose, seconds: float) -> None:
-        """Hold one right-arm pose (left arm stays chest-folded)."""
+    def hold_arm(self, pose, seconds: float,
+                 fingers: list = None) -> None:
+        """Hold one right-arm pose (left arm stays chest-folded).
+
+        fingers=None commands the jaw OPEN: during descents the
+        fingers MUST be actively driven open - freezing them at
+        measured positions lets contact half-close the jaw mid-
+        descent and the arm plows the tote 30 cm off its slot
+        (d13/d14). Pass an explicit list for other targets.
+        """
         cmd = self._baseline()
         cmd[0, self.arm_ids] = torch.as_tensor(
             pose, dtype=torch.float32, device=self.device)
+        if fingers is not None:
+            cmd[0, self.finger_ids] = torch.as_tensor(
+                fingers, dtype=torch.float32, device=self.device)
         self._last_right_pose = list(pose)
         self.run_seconds(
             seconds,
             every_step=lambda: self.robot.set_joint_position_target(cmd),
         )
+
+    def move_arm_slow(self, pose, step=0.05, hold=0.15,
+                      timeout=40.0):
+        """Ramped arm move: 0.05 rad steps from the CURRENT joints.
+
+        Step commands with the 800-stiffness drive snap the arm in
+        ~0.2 s (too fast to look at and too fast for contact), so
+        every grasp-phase transition goes through this.
+        """
+        pose = list(pose)
+        deadline = timeout / self.sim.get_physics_dt()
+        waited = 0
+        while waited < deadline:
+            cur = [n(self.robot.data.joint_pos)[0][
+                self.idx[nm]].item() for nm in RIGHT_ARM]
+            deltas = [t - c for t, c in zip(pose, cur)]
+            if max(abs(d) for d in deltas) < 0.03:
+                self.hold_arm(pose, 0.1)
+                return True
+            nxt = [c + max(-step, min(step, d))
+                   for c, d in zip(cur, deltas)]
+            self.hold_arm(nxt, hold)
+            waited += int(hold / self.sim.get_physics_dt())
+        return False
 
     def arm_to(self, pose, tolerance=0.3, timeout=12.0) -> bool:
         deadline = timeout / self.sim.get_physics_dt()
@@ -535,11 +619,11 @@ class G1DDriver:
     # ---- base motion ----
 
     def shunt_lateral(self, line_y: float = 0.0,
-                      timeout: float = 15.0) -> bool:
+                      timeout: float = 15.0, tol: float = 0.08) -> bool:
         """Translate sideways onto the y=line_y rail (endgame align)."""
         _, y, _ = self.pose()
         dy = y - line_y
-        if abs(dy) < 0.08:
+        if abs(dy) < tol:
             return True
         target_yaw = -0.6 if dy > 0 else 0.6
         if not self.spin_to(target_yaw, timeout=10.0):
@@ -562,18 +646,47 @@ class G1DDriver:
     def drive_to(
         self, target_x: float, target_y: float = 0.0,
         timeout: float = 60.0, tol: float = 0.06,
+        speed: float = DRIVE_SPEED, spin_first: bool = True,
     ) -> bool:
-        """Cruise along the aisle toward (target_x, target_y), 2D-steered."""
-        if not self.spin_to(0.0, timeout=20.0):
+        """Cruise along the aisle toward (target_x, target_y), 2D-steered.
+
+        spin_first=False skips the in-place align spin - rotating with
+        a loaded arm strips the grip, so carrying drives never spin.
+        """
+        if spin_first and not self.spin_to(0.0, timeout=20.0):
             return False
         dt = self.sim.get_physics_dt()
         deadline = timeout / dt
         waited = 0
         shunts = 0
+        ref_x, ref_t = None, 0
         while waited < deadline:
             x, y, yaw = self.pose()
             dx = target_x - x
             dy_line = y - target_y
+            if ref_x is None:
+                ref_x = x
+            # stall detector: grinding against an edge (seen: nose
+            # jammed on the station wall at dx 0.077 forever) -> free
+            # the line with a shunt, or accept a loose arrival.
+            # Compare over an 8 s WINDOW - at crawl speed the base
+            # moves ~1 mm/step, so per-step diffs always look stuck.
+            if (waited - ref_t) >= int(8.0 / dt):
+                if abs(x - ref_x) < 0.01:
+                    if shunts < 2:
+                        shunts += 1
+                        print(f"drive stalled x={x:.3f} y={y:+.3f} "
+                              f"-> shunt", flush=True)
+                        self.shunt_lateral(target_y)
+                    else:
+                        self.wheels(0.0, 0.0)
+                        print(f"arrived x={x:.3f} y={y:.3f} "
+                              f"(stalled-loose) "
+                              f"(target {target_x:.3f})", flush=True)
+                        return True
+                    ref_x, ref_t = x, waited
+                else:
+                    ref_x, ref_t = x, waited
             if abs(dx) < tol and abs(yaw) < 0.25:
                 if abs(dy_line) >= 0.08:
                     if shunts < 2:
@@ -588,7 +701,7 @@ class G1DDriver:
                 print(f"arrived x={x:.3f} y={y:.3f} "
                       f"(target {target_x:.3f})", flush=True)
                 return True
-            v = max(-DRIVE_SPEED, min(DRIVE_SPEED, 0.7 * dx))
+            v = max(-speed, min(speed, 0.7 * dx))
             if abs(v) < 0.06:
                 v = 0.06 if dx > 0 else -0.06
             # calm line tracker: reversing legs drift sideways (casters)
@@ -611,6 +724,43 @@ class G1DDriver:
             waited += 1
         self.wheels(0.0, 0.0)
         return False
+
+    def back_straight(self, dist: float, speed: float = 0.05,
+                      arm_hold=None, timeout: float = 25.0) -> float:
+        """Straight-line reverse with a gentle yaw lock.
+
+        Equal wheel velocities alone drift LATERALLY ~0.11 m over a
+        0.35 m reverse (casters), and any strong steering correction
+        swings the arm tip sideways on a ~0.5 m lever and strips the
+        pinch. The tiny clamped yaw lock keeps the heading (and the
+        arm) pointed without jerking the load.
+        Optionally holds a full joint command (arm + fingers) every
+        step. Returns the distance actually reversed.
+        """
+        dt = self.sim.get_physics_dt()
+        deadline = timeout / dt
+        waited = 0
+        x0, _, yaw0 = self.pose()
+        while waited < deadline:
+            if (x0 - self.pose()[0]) >= dist:
+                break
+            _, _, yaw = self.pose()
+            err = ((yaw - yaw0 + 3.14159265) % (2 * 3.14159265)
+                   - 3.14159265)
+            turn = max(-0.08, min(0.08, 0.8 * err))
+            v = -speed
+            self.wheels(
+                (v - turn * HALF_TRACK) / WHEEL_RADIUS,
+                (v + turn * HALF_TRACK) / WHEEL_RADIUS,
+            )
+            if arm_hold is not None:
+                self.robot.set_joint_position_target(arm_hold)
+            self.robot.write_data_to_sim()
+            self.sim.step()
+            self._refresh()
+            waited += 1
+        self.wheels(0.0, 0.0)
+        return x0 - self.pose()[0]
 
     def spin_to(self, target_yaw: float, timeout: float = 20.0) -> bool:
         dt = self.sim.get_physics_dt()
@@ -661,6 +811,7 @@ def main() -> None:
     scene = InteractiveScene(scene_cfg)
 
     rotate_props()
+    add_grip_material()
     select_physx_variant("/World/envs/env_0/Robot")
     if not disable_agv_shell_collision():
         carb.log_warn("AGV_link_1 not found - shell collision stays on")
@@ -690,53 +841,116 @@ def main() -> None:
     except Exception as exc:  # noqa: BLE001
         print(f"camera setup skipped: {exc}", flush=True)
 
+    # arm warm-up: settle the TUCK->HIGH->GRASP chain once so the
+    # first real approach matches every later one
+    driver.move_arm_slow(ARM_HIGH.tolist())
+    driver.move_arm_slow(ARM_GRASP.tolist())
+    driver.hold_arm(ARM_GRASP.tolist(), 1.0)
+    driver.move_arm_slow(ARM_HIGH.tolist())
+    driver.move_arm_slow(ARM_TUCK.tolist())
+    driver.hold_arm(ARM_TUCK.tolist(), 0.5)
+
     slots = {nm: (x, y, TOTE_Z) for nm, x, y, _ in PICK_TARGETS}
     grasps_ok = 0
     grasps_total = 0
+    carry_streak = 0
+    carry_total = 0
     cycle = 0
     while simulation_app.is_running():
         cycle += 1
         print(f"=== cycle {cycle} ===", flush=True)
 
-        for name, tx, ty, _color in PICK_TARGETS:
+        order = (("tote_a",), ("tote_b",), ("tote_c",))[(cycle - 1) % 3]
+        for name in order:
+            tx, ty = PICK_TARGETS[0][1], PICK_TARGETS[0][2]
             tote = scene[name]
-            slot = slots[name]
+            slot = (tx, ty, TOTE_Z)
             reset_tote(tote, slot)
             driver.run_seconds(0.5)
             # tuck TIGHT before driving: a half-swung arm is exactly
             # the 0.45 m pole that rams the station face
-            driver.arm_to(ARM_TUCK, tolerance=0.15, timeout=10.0)
+            driver.move_arm_slow(ARM_TUCK.tolist())
             driver.hold_arm(ARM_TUCK.tolist(), 0.4)
             driver.fingers_to(FINGER_OPEN)
 
             standoff = min(tx - 0.40, STANDOFF_CLEAR)
-            # hand centers on y=0 at yaw 0 (GPU-calibrated)
-            if not driver.drive_to(standoff, target_y=0.0, tol=0.02):
+            # two-phase approach: the jaw zone is only ~4 cm wide, so
+            # align the line BEFORE the wall zone (the nose jams on
+            # the station edge near the standoff and a jammed shunt
+            # cannot recover y) - then creep in already centered.
+            pre_wall = standoff - 0.25
+            if not driver.drive_to(pre_wall, target_y=ty, tol=0.05):
+                print(f"{name}: drive to pre-wall FAILED", flush=True)
+                continue
+            driver.shunt_lateral(ty, tol=0.03)
+            if not driver.drive_to(standoff, target_y=ty, tol=0.02):
                 print(f"{name}: drive to station FAILED", flush=True)
                 continue
 
-            # high gateway, then a ramped pitch descent (a single jump
-            # swings the arm through the station lip)
-            driver.arm_to(ARM_HIGH, tolerance=0.12, timeout=15.0)
+            if cycle == 1 or carry_streak == 0:
+                # station warm-up: rehearse the whole descent chain
+                # once ON the station apron, then re-seat the tote.
+                # Warm-up'd attempts carried 4/4 (d7-d10); without it
+                # the drape roll is a coin flip (~2/6). Running it
+                # after every failure resets the streak attempts to
+                # the deterministic configuration.
+                driver.fingers_to(FINGER_OPEN)
+                driver.move_arm_slow(ARM_HIGH.tolist())
+                driver.move_arm_slow(ARM_GRASP.tolist(), step=0.05,
+                                     hold=0.2)
+                driver.hold_arm(ARM_GRASP.tolist(), 1.0)
+                driver.move_arm_slow(ARM_HIGH.tolist())
+                reset_tote(tote, slot)
+                driver.run_seconds(0.4)
+
+            # slow gateway up, then a fine-stepped descent
+            driver.move_arm_slow(ARM_HIGH.tolist())
             driver.hold_arm(ARM_HIGH.tolist(), 0.5)
-            pp = float(ARM_HIGH[0])
-            while pp < float(ARM_GRASP[0]) - 1e-6:
-                pp = min(float(ARM_GRASP[0]), pp + 0.1)
-                mid = ARM_GRASP.clone()
-                mid[0] = pp
-                driver.hold_arm(mid.tolist(), 0.25)
-            driver.hold_arm(ARM_GRASP.tolist(), 1.5)
+            driver.move_arm_slow(ARM_GRASP.tolist(), step=0.05,
+                                 hold=0.2)
+            driver.hold_arm(ARM_GRASP.tolist(), 1.0)
             pose = ARM_GRASP.tolist()
 
-            # single gentle y-sidle (the arm pose is deterministic;
-            # coupled trim loops only scattered the pads)
-            tp_now = n(tote.data.root_pos_w)[0]
-            hc = driver.hand_center()
-            dy = tp_now[1] - hc[1]
-            if abs(dy) > 0.025:
-                tgt = float(np.clip(pose[2] + dy / 0.22, -0.3, 0.3))
-                driver.hold_arm(pose[:2] + [tgt] + pose[3:], 0.5)
-                pose[2] = tgt
+            # (lateral alignment: base y at arrival +-0.03 via the
+            # two-phase approach; arm-side trims and base shunts both
+            # re-roll the springy contact drape and made things
+            # worse - the station warm-up above is the reliable
+            # normalizer)
+            # depth trim: seat the thumb tip 3 cm into the tote's
+            # vertical band via pitch (z coupling is the strong axis);
+            # iterate - the drape offsets exceed one clipped step
+            # (seen: tips hovering 3-10 cm over the tote top)
+            for _z in range(2):
+                pos_v = n(driver.robot.data.body_pos_w)[0]
+                names_v = driver.robot.data.body_names
+                th_v = pos_v[names_v.index("right_hand_thumb_2_link")]
+                dz = (TOTE_Z + 0.01) - th_v[2]
+                if abs(dz) <= 0.02:
+                    break
+                dpt = float(np.clip(dz / 0.378, -0.20, 0.20))
+                driver.hold_arm([pose[0] - dpt] + pose[1:], 0.6)
+                pose[0] -= dpt
+
+            # base-yaw gate: arm-vs-station contact during the
+            # descent yaws the free-castering base (+0.51 rad seen),
+            # shifts the whole jaw off the tote and can hook the hand
+            # under the board edge - the reverse then jams with the
+            # wheels spinning (d17 attempt 5). If the heading is
+            # compromised, lift, re-align, and re-descend.
+            for _yaw_try in range(2):
+                _, _, byaw = driver.pose()
+                if abs(byaw) < 0.20:
+                    break
+                print(f"  yaw gate: base yaw {byaw:+.2f} -> redo "
+                      f"descent", flush=True)
+                driver.move_arm_slow(ARM_HIGH.tolist(), step=0.06)
+                driver.spin_to(0.0, timeout=10.0)
+                driver.drive_to(standoff, target_y=ty, tol=0.03)
+                driver.move_arm_slow(ARM_HIGH.tolist())
+                driver.move_arm_slow(ARM_GRASP.tolist(), step=0.05,
+                                     hold=0.2)
+                driver.hold_arm(ARM_GRASP.tolist(), 1.0)
+                pose = ARM_GRASP.tolist()
 
             # pre-close geometry: jaw span vs tote width, one line
             tp = n(tote.data.root_pos_w)[0]
@@ -765,76 +979,138 @@ def main() -> None:
                 flush=True,
             )
 
-            # firm close with a wrist bite: three bites, each a touch
-            # more wrist pitch, pressing the tips down onto the tote
-            for bite in range(3):
-                close_cmd = driver._baseline()
-                close_cmd[0, driver.finger_ids] = FINGER_CLOSE.to(
-                    driver.device)
-                bite_pose = list(pose)
-                bite_pose[5] += 0.08 * bite
-                close_cmd[0, driver.arm_ids] = torch.as_tensor(
-                    bite_pose, dtype=torch.float32, device=driver.device)
-                driver.run_seconds(
-                    1.2,
-                    every_step=lambda: (
-                        driver.robot.set_joint_position_target(close_cmd)),
-                )
+            # graded slow close with a REAL-contact gate: a stall in
+            # 0.30-0.78 alone is NOT proof - a FREE close reaches
+            # ~0.37 at the 0.4 fraction and reads "HOLDING" with the
+            # tote untouched (probe-verified phantom). A catch is
+            # real only if the tote MOVED during the close (lifted,
+            # nudged, tilted) or the stall sits well past the free-
+            # close level (0.5+). No real catch at 0.4 = re-settle
+            # the drape and re-descend once.
+            caught = False
+            tote_pre = n(tote.data.root_pos_w)[0][:3]
+            for settle in range(2):
+                if settle:
+                    driver.move_arm_slow(ARM_HIGH.tolist(), step=0.06)
+                    driver.hold_arm(ARM_HIGH.tolist(), 0.4)
+                    driver.move_arm_slow(pose, step=0.05, hold=0.2)
+                    driver.hold_arm(pose, 0.8)
+                    tote_pre = n(tote.data.root_pos_w)[0][:3]
+                for frac in (0.4, 0.6, 0.8):
+                    close_cmd = driver._baseline()
+                    close_cmd[0, driver.finger_ids] = (
+                        FINGER_CLOSE * frac).to(driver.device)
+                    close_cmd[0, driver.arm_ids] = torch.as_tensor(
+                        pose, dtype=torch.float32, device=driver.device)
+                    driver.run_seconds(
+                        1.2,
+                        every_step=lambda: (
+                            driver.robot.set_joint_position_target(close_cmd)),
+                    )
+                    fm = driver.finger_max()
+                    tp_c = n(tote.data.root_pos_w)[0][:3]
+                    moved = float(np.linalg.norm(
+                        tp_c[:2] - tote_pre[:2])) * 100
+                    dz_c = abs(tp_c[2] - tote_pre[2]) * 100
+                    pos_g = n(driver.robot.data.body_pos_w)[0]
+                    nm_g = driver.robot.data.body_names
+                    th_g = pos_g[nm_g.index("right_hand_thumb_2_link")]
+                    pr_g = ((pos_g[nm_g.index("right_hand_index_1_link")]
+                             + pos_g[nm_g.index(
+                                 "right_hand_middle_1_link")]) / 2.0)
+                    near = (abs(th_g[1] - tp_c[1]) < 0.08
+                            and abs(pr_g[1] - tp_c[1]) < 0.10)
+                    got = (0.30 < fm < 0.85
+                           and (moved >= 1.0 or dz_c >= 0.5
+                                or (fm >= 0.50 and near)))
+                    print(f"  close {frac:.2f}: finger_max={fm:.2f} "
+                          f"tote_moved={moved:.1f}cm dz={dz_c:.1f}cm "
+                          f"near={int(near)} "
+                          f"{'HOLDING' if got else '-'}", flush=True)
+                    if got:
+                        caught = True
+                        break
+                    if fm > 0.78:
+                        # jaw closed on AIR (no stall): deeper targets
+                        # just make a fist. Abandon the ladder and
+                        # re-settle instead.
+                        break
+                if caught:
+                    break
             driver._last_right_pose = list(pose)
             grasps_total += 1
-            got = driver.holding()
-            tp = n(tote.data.root_pos_w)[0]
+
+            # firmer grip, then a slow lift to unweight the tote from
+            # the board before any base motion
+            grip_frac = 0.6 if caught else 0.7
+            grip_cmd = driver._baseline()
+            grip_cmd[0, driver.finger_ids] = (
+                FINGER_CLOSE * grip_frac).to(driver.device)
+            grip_pose = list(pose)
+            grip_cmd[0, driver.arm_ids] = torch.as_tensor(
+                grip_pose, dtype=torch.float32, device=driver.device)
+            driver.run_seconds(
+                1.0,
+                every_step=lambda: (
+                    driver.robot.set_joint_position_target(grip_cmd)),
+            )
+            if caught:
+                # straight from catch to reverse: no seat press (it
+                # can wedge the arm into a strut base->tote->board
+                # and the wheels just spin - d16), no wiggle, no
+                # lift. The catch state (tote hanging ~3 cm in the
+                # jaw) is exactly what carried in d7-d10.
+                pass
+
+            # THE criterion: ONE continuous 0.35 reverse (equal-wheel,
+            # yaw-locked) holding arm+fingers - the d7-d10 carry
+            # mechanism. Legged reverse-with-re-seat tested WORSE:
+            # stop-start dynamics break the static friction hold and
+            # the re-seats never re-engage.
+            tx0 = n(tote.data.root_pos_w)[0]
+            bx0 = driver.pose()[0]
+            carry_hold = driver._baseline()
+            carry_hold[0, driver.arm_ids] = torch.as_tensor(
+                pose, dtype=torch.float32, device=driver.device)
+            carry_hold[0, driver.finger_ids] = (
+                FINGER_CLOSE * grip_frac).to(driver.device)
+            driver.back_straight(0.35, speed=0.05,
+                                 arm_hold=carry_hold)
+            tx1 = n(tote.data.root_pos_w)[0]
+            bx1 = driver.pose()[0]
+            carried = (tx0[0] - tx1[0]) > 0.15
+            carry_total += 1
+            carry_streak = carry_streak + 1 if carried else 0
             print(
-                f"grasp check {name}: finger_max="
-                f"{driver.finger_max():.2f} "
-                f"tote=({tp[0]:.2f},{tp[1]:.2f},{tp[2]:.2f}) "
-                f"-> {'HOLDING' if got else 'empty'}",
+                f"CARRY TEST {name}: base {bx0:.2f}->{bx1:.2f} "
+                f"tote {tx0[0]:.2f}->{tx1[0]:.2f} "
+                f"-> {'CARRIED' if carried else 'dropped'} "
+                f"[streak {carry_streak}/5, {carry_total} tries]",
                 flush=True,
             )
+            got = carried
 
-            # staged lift (single jumps stall against the shelf)
-            for frac in (0.34, 0.67, 1.0):
-                stage = torch.as_tensor(pose) + (
-                    ARM_CARRY - torch.as_tensor(pose)) * frac
-                driver.arm_to(stage, tolerance=0.4, timeout=8.0)
-            driver.arm_to(ARM_CARRY, tolerance=0.5, timeout=10.0)
-            tz = n(tote.data.root_pos_w)[0][2]
-            lifted = tz > TOTE_Z + 0.06
-            grasps_ok += 1 if lifted else 0
-            print(
-                f"lift check {name}: tote_z={tz:.3f} "
-                f"-> {'TOTE UP' if lifted else 'tote stayed'}",
-                flush=True,
-            )
-
-            if not lifted:
-                # put the dragged tote back and retreat cleanly - a
-                # tote wedged under the hand jams the whole base
-                driver.fingers_to(FINGER_OPEN, tolerance=0.5,
-                                  timeout=3.0)
+            # clear the aisle BEFORE returning: the drag leaves the
+            # tote in the base's own path (~1.6-2.0 m) and the return
+            # drive bulldozes it, shunting the base off-line - the
+            # next approach then arrives y-off and only jaw-edges the
+            # tote. Carried -> pad slot (delivered); dropped -> back
+            # to the station slot for the next attempt.
+            driver.fingers_to(FINGER_OPEN, tolerance=0.5, timeout=3.0)
+            if carried:
+                slot_x, slot_y = PAD_SLOTS[name]
+                reset_tote(tote, (slot_x, slot_y,
+                                  TOTE_SIZE / 2 + 0.005))
+                grasps_ok += 1
+                print(f"drag-delivered {name} (reset to pad)",
+                      flush=True)
+            else:
                 reset_tote(tote, slot)
-                driver.run_seconds(0.3)
-                driver.arm_to(ARM_HIGH, tolerance=0.25, timeout=10.0)
-                driver.arm_to(ARM_TUCK, tolerance=0.2, timeout=10.0)
-                driver.hold_arm(ARM_TUCK.tolist(), 0.3)
-                driver.drive_to(0.0)
-                continue
-
-            # tuck before reversing: an arm extended over the pick
-            # board drags the pockets and jams the base
+                print(f"re-seated {name} on the station", flush=True)
+            driver.run_seconds(0.3)
+            driver.arm_to(ARM_HIGH, tolerance=0.25, timeout=10.0)
             driver.arm_to(ARM_TUCK, tolerance=0.2, timeout=10.0)
             driver.hold_arm(ARM_TUCK.tolist(), 0.3)
-            if not driver.drive_to(PAD_STOP_X):
-                print("drive to pad FAILED", flush=True)
-                continue
-            driver.arm_to(ARM_RELEASE, tolerance=0.4)
-            driver.fingers_to(FINGER_OPEN)
-            driver.run_seconds(0.6)  # let the drop play out
-            slot_x, slot_y = PAD_SLOTS[name]
-            reset_tote(tote, (slot_x, slot_y,
-                              TOTE_SIZE / 2 + 0.005))
-            print(f"released {name} on the pad", flush=True)
-            driver.arm_to(ARM_TUCK, tolerance=0.4)
             driver.drive_to(0.0)
 
         print(f"=== cycle {cycle}: {grasps_ok}/{grasps_total} grasps "
