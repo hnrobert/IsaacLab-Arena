@@ -93,7 +93,7 @@ def n(t):
 WHEEL_JOINTS = ["Left_Wheel_Joint", "Right_Wheel_Joint"]
 WHEEL_RADIUS = 0.0845
 HALF_TRACK = 0.2031
-DRIVE_SPEED = 0.25
+DRIVE_SPEED = 0.30
 HOME_ROOT_Z = 0.113  # WHEEL_JOINT_Z + WHEEL_RADIUS + hover
 
 RIGHT_ARM = [
@@ -137,14 +137,16 @@ TOTE_SIZE = 0.12          # fills the 11.7 cm thumb-to-middle gap at wrist -0.5
 TOTE_Z = 0.77 + TOTE_SIZE / 2 + 0.005  # board top + half tote
 STANDOFF_CLEAR = 1.84     # physics wall: AGV nose hits the 2.20 edge
 
-# ONE proven pick slot on the centerline (the jaw zone is only ~4 cm
-# wide); b/c are dressing on the racking. The slot refills each cycle
-# with the next tote in the rotation.
+# FIVE pick slots across the 0.9 m board (y +-0.45): every cycle
+# services all five totes in sequence - multiple picks per visit.
 PICK_TARGETS = (
-    ("tote_a", 2.27, 0.0, (0.9, 0.45, 0.1)),
-    ("tote_b", 2.27, 0.0, (0.1, 0.6, 0.9)),
-    ("tote_c", 2.27, 0.0, (0.2, 0.8, 0.3)),
+    ("tote_a", 2.27, 0.00, (0.9, 0.45, 0.1)),
+    ("tote_b", 2.27, 0.16, (0.1, 0.6, 0.9)),
+    ("tote_c", 2.27, -0.16, (0.2, 0.8, 0.3)),
+    ("tote_d", 2.27, 0.32, (0.8, 0.2, 0.6)),
+    ("tote_e", 2.27, -0.32, (0.3, 0.7, 0.8)),
 )
+TOTE_NAMES = tuple(e[0] for e in PICK_TARGETS)
 
 # delivered totes are tidied onto these pad slots after the release.
 # They MUST sit outside the base's swept width: drive_to would
@@ -153,6 +155,8 @@ PAD_SLOTS = {
     "tote_a": (-0.90, 0.55),
     "tote_b": (-1.10, 0.55),
     "tote_c": (-1.00, -0.55),
+    "tote_d": (-1.20, -0.55),
+    "tote_e": (-0.80, -0.55),
 }
 PAD_STOP_X = -0.85
 
@@ -350,14 +354,19 @@ class G1DSceneCfg(InteractiveSceneCfg):
         init_state=AssetBaseCfg.InitialStateCfg(pos=PAD_POS),
     )
 
-    # --- pick targets on the pick board ---
-    tote_a = make_tote_cfg("tote_a", (2.27, 0.0, TOTE_Z),
+    # --- pick targets on the station board ---
+    # every tote spawns ON its station slot (the rack dressing
+    # positions are gone - all five are pick targets now)
+    tote_a = make_tote_cfg("tote_a", (2.27, 0.00, TOTE_Z),
                            PICK_TARGETS[0][3])
-    # b/c rest on the racking as dressing
-    tote_b = make_tote_cfg("tote_b", (-2.8, 1.6, 0.85),
+    tote_b = make_tote_cfg("tote_b", (2.27, 0.16, TOTE_Z),
                            PICK_TARGETS[1][3])
-    tote_c = make_tote_cfg("tote_c", (-0.6, -1.6, 0.85),
+    tote_c = make_tote_cfg("tote_c", (2.27, -0.16, TOTE_Z),
                            PICK_TARGETS[2][3])
+    tote_d = make_tote_cfg("tote_d", (2.27, 0.32, TOTE_Z),
+                           PICK_TARGETS[3][3])
+    tote_e = make_tote_cfg("tote_e", (2.27, -0.32, TOTE_Z),
+                           PICK_TARGETS[4][3])
 
     robot = ArticulationCfg(
         prim_path="{ENV_REGEX_NS}/Robot",
@@ -466,7 +475,7 @@ def add_grip_material(env_ns="/World/envs/env_0") -> None:
     bound = 0
     for prim in stage.Traverse():
         nm = prim.GetName()
-        bind = (nm in ("tote_a", "tote_b", "tote_c")
+        bind = (nm in TOTE_NAMES
                 or (nm in ("right_hand_thumb_2_link_1",
                            "right_hand_middle_1_link_1",
                            "right_hand_index_1_link_1")))
@@ -765,8 +774,12 @@ class G1DDriver:
             v = max(-speed, min(speed, 0.7 * dx))
             if abs(v) < 0.06:
                 v = 0.06 if dx > 0 else -0.06
-            # calm line tracker: reversing legs drift sideways (casters)
-            desired = max(-0.35, min(0.35, math.atan2(-dy_line, 2.5)))
+            # calm PURE-PURSUIT line tracker: reversing legs drift
+            # sideways (casters). Lookahead shrinks with the
+            # remaining distance so lateral offsets actually close
+            # (a fixed 2.5 m lookahead on a 1.8 m leg leaves ~8 cm)
+            desired = max(-0.35, min(
+                0.35, math.atan2(-dy_line, max(0.35, abs(dx)))))
             if dx < 0:
                 desired = -desired
             err_yaw = (desired - yaw + 3.14159265) % (2 * 3.14159265) \
@@ -886,14 +899,14 @@ def main() -> None:
 
     driver = G1DDriver(
         scene["robot"], sim,
-        totes=[scene[nm] for nm in ("tote_a", "tote_b", "tote_c")])
+        totes=[scene[nm] for nm in TOTE_NAMES])
     x0, y0, yaw0 = driver.pose()
     print(f"root after reset: x={x0:.3f} y={y0:.3f} yaw={yaw0:.3f}",
           flush=True)
     for _ in range(120):  # 2 s settle
         step_sim(sim)
         scene["robot"].update(sim.get_physics_dt())
-        for nm in ("tote_a", "tote_b", "tote_c"):
+        for nm in TOTE_NAMES:
             scene[nm].update(sim.get_physics_dt())
 
     try:
@@ -906,14 +919,9 @@ def main() -> None:
     except Exception as exc:  # noqa: BLE001
         print(f"camera setup skipped: {exc}", flush=True)
 
-    # arm warm-up: settle the TUCK->HIGH->GRASP chain once so the
-    # first real approach matches every later one
-    driver.move_arm_slow(ARM_HIGH.tolist())
-    driver.move_arm_slow(ARM_GRASP.tolist())
-    driver.hold_arm(ARM_GRASP.tolist(), 1.0)
-    driver.move_arm_slow(ARM_HIGH.tolist())
-    driver.move_arm_slow(ARM_TUCK.tolist())
-    driver.hold_arm(ARM_TUCK.tolist(), 0.5)
+    # (home warm-up removed: the STATION warm-up below is the
+    # effective drape normalizer - this chain only added ~25 s of
+    # sim time before the first drive)
 
     slots = {nm: (x, y, TOTE_Z) for nm, x, y, _ in PICK_TARGETS}
     grasps_ok = 0
@@ -925,17 +933,16 @@ def main() -> None:
         cycle += 1
         print(f"=== cycle {cycle} ===", flush=True)
 
-        order = (("tote_a",), ("tote_b",), ("tote_c",))[(cycle - 1) % 3]
-        for name in order:
-            tx, ty = PICK_TARGETS[0][1], PICK_TARGETS[0][2]
+        for name, tx, ty, _color in PICK_TARGETS:
             tote = scene[name]
             slot = (tx, ty, TOTE_Z)
             reset_tote(tote, slot)
             driver.run_seconds(0.5)
             # tuck TIGHT before driving: a half-swung arm is exactly
             # the 0.45 m pole that rams the station face
-            driver.move_arm_slow(ARM_TUCK.tolist())
-            driver.hold_arm(ARM_TUCK.tolist(), 0.4)
+            driver.move_arm_slow(ARM_TUCK.tolist(), step=0.08,
+                                 hold=0.10)
+            driver.hold_arm(ARM_TUCK.tolist(), 0.2)
             driver.fingers_to(FINGER_OPEN)
 
             standoff = min(tx - 0.40, STANDOFF_CLEAR)
@@ -960,17 +967,20 @@ def main() -> None:
                 # after every failure resets the streak attempts to
                 # the deterministic configuration.
                 driver.fingers_to(FINGER_OPEN)
-                driver.move_arm_slow(ARM_HIGH.tolist())
+                driver.move_arm_slow(ARM_HIGH.tolist(), step=0.08,
+                                     hold=0.10)
                 driver.move_arm_slow(ARM_GRASP.tolist(), step=0.05,
                                      hold=0.2)
-                driver.hold_arm(ARM_GRASP.tolist(), 1.0)
-                driver.move_arm_slow(ARM_HIGH.tolist())
+                driver.hold_arm(ARM_GRASP.tolist(), 0.5)
+                driver.move_arm_slow(ARM_HIGH.tolist(), step=0.08,
+                                     hold=0.10)
                 reset_tote(tote, slot)
-                driver.run_seconds(0.4)
+                driver.run_seconds(0.3)
 
             # slow gateway up, then a fine-stepped descent
-            driver.move_arm_slow(ARM_HIGH.tolist())
-            driver.hold_arm(ARM_HIGH.tolist(), 0.5)
+            driver.move_arm_slow(ARM_HIGH.tolist(), step=0.08,
+                                 hold=0.10)
+            driver.hold_arm(ARM_HIGH.tolist(), 0.3)
             driver.move_arm_slow(ARM_GRASP.tolist(), step=0.05,
                                  hold=0.2)
             driver.hold_arm(ARM_GRASP.tolist(), 1.0)
@@ -1019,9 +1029,19 @@ def main() -> None:
                     driver.run_seconds(0.4)
                 print(f"  descent gate: {why} -> redo descent",
                       flush=True)
+                pos_o = n(driver.robot.data.body_pos_w)[0]
+                nm_o = driver.robot.data.body_names
+                th_o = pos_o[nm_o.index("right_hand_thumb_2_link")]
+                pr_o = (pos_o[nm_o.index("right_hand_index_1_link")]
+                        + pos_o[nm_o.index(
+                            "right_hand_middle_1_link")]) / 2.0
+                tp_o = n(tote.data.root_pos_w)[0]
+                off = (th_o[1] + pr_o[1]) / 2.0 - tp_o[1]
+                ty_eff = float(np.clip(ty - 0.8 * off,
+                                       ty - 0.12, ty + 0.12))
                 driver.move_arm_slow(ARM_HIGH.tolist(), step=0.06)
                 driver.spin_to(0.0, timeout=10.0)
-                driver.drive_to(standoff, target_y=ty, tol=0.03)
+                driver.drive_to(standoff, target_y=ty_eff, tol=0.03)
                 driver.move_arm_slow(ARM_HIGH.tolist())
                 driver.move_arm_slow(ARM_GRASP.tolist(), step=0.05,
                                      hold=0.2)
@@ -1088,13 +1108,32 @@ def main() -> None:
                     # re-descents replay the identical missing
                     # geometry, but too deep hooks the board edge
                     pose[5] = -0.50 - 0.04 * settle
+                    # BASE-SIDE drape compensation: on the off-center
+                    # slots the arm hangs 5-7 cm past the tote; the
+                    # arm cannot be trimmed, but the BASE aims true -
+                    # steer the standoff target by the measured jaw
+                    # offset so the draped jaw lands on the tote
+                    pos_o = n(driver.robot.data.body_pos_w)[0]
+                    nm_o = driver.robot.data.body_names
+                    th_o = pos_o[nm_o.index("right_hand_thumb_2_link")]
+                    pr_o = (pos_o[nm_o.index(
+                        "right_hand_index_1_link")]
+                        + pos_o[nm_o.index(
+                            "right_hand_middle_1_link")]) / 2.0
+                    tp_o = n(tote.data.root_pos_w)[0]
+                    off = (th_o[1] + pr_o[1]) / 2.0 - tp_o[1]
+                    ty_eff = float(np.clip(ty - 0.8 * off,
+                                           ty - 0.12, ty + 0.12))
+                    if abs(off) > 0.03:
+                        print(f"  base-yaw... drape off={off:+.3f} "
+                              f"-> aim y {ty_eff:+.3f}", flush=True)
                     # lift, restore the standoff (a slipped round
                     # sits 5 cm back; a jammed one needs the unhook)
                     # and drop a fresh drape
                     driver.move_arm_slow(ARM_HIGH.tolist(), step=0.06)
                     driver.hold_arm(ARM_HIGH.tolist(), 0.4)
-                    driver.drive_to(standoff, target_y=ty, tol=0.03,
-                                    timeout=30.0)
+                    driver.drive_to(standoff, target_y=ty_eff,
+                                    tol=0.03, timeout=30.0)
                     driver.move_arm_slow(ARM_HIGH.tolist())
                     driver.move_arm_slow(pose, step=0.05, hold=0.2)
                     driver.hold_arm(pose, 0.8)
