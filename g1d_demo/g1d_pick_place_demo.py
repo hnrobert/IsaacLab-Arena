@@ -24,6 +24,11 @@ import argparse
 from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument(
+    "--hand-only-collision", action="store_true",
+    help="strip arm colliders (worse grasping: the shoulder contact "
+         "is load-bearing for the grasp equilibrium - 89pct carry "
+         "WITH it vs ~40pct without)")
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
 # IsaacLab 3.0: a GUI window requires the 'kit' visualizer explicitly -
@@ -60,7 +65,7 @@ WAREHOUSE = os.path.join(REPO, "g1d_demo", "assets", "warehouse")
 # wall-clock minutes) and the robot looks frozen between prints.
 # Physics keeps its 60 Hz; only every RENDER_EVERY-th step renders
 # (~15 fps visual). Headless never renders at all.
-RENDER_EVERY = 4
+RENDER_EVERY = 6
 _render_counter = 0
 
 
@@ -407,6 +412,39 @@ def disable_agv_shell_collision() -> bool:
             print(f"shell collision off: {prim.GetPath()}", flush=True)
             return True
     return False
+
+
+def arm_collision_hand_only() -> int:
+    """Strip collision from every non-hand robot collider.
+
+    Policy (user): colliders ONLY on the hands - plus wheels and
+    casters, which driving needs. The shoulder cylinders were strut
+    sources: arm-vs-station contact wedged base->arm->board and
+    deadlocked the wheels (d16), and contact shove-induced base yaw
+    (+0.5 rad) hooked the hand under the board (d17).
+    """
+    from pxr import UsdPhysics as Phys
+
+    stage = omni.usd.get_context().get_stage()
+    stripped = 0
+    for prim in stage.Traverse():
+        path = str(prim.GetPath())
+        if "/Robot/" not in path or not prim.HasAPI(Phys.CollisionAPI):
+            continue
+        nm = prim.GetName()
+        parent = prim.GetParent().GetName()
+        keep = (
+            "Wheel_Link" in parent               # wheel cylinders
+            or nm.startswith("caster_")          # AGV ground support
+            or "_link_1" in parent               # fingertip hulls
+            or (nm == "box" and "hand" in path)  # thumb pad boxes
+        )
+        if keep:
+            continue
+        Phys.CollisionAPI(prim).CreateCollisionEnabledAttr(False)
+        stripped += 1
+        print(f"collision off: {path}", flush=True)
+    return stripped
 
 
 def add_grip_material(env_ns="/World/envs/env_0") -> None:
@@ -838,6 +876,10 @@ def main() -> None:
     select_physx_variant("/World/envs/env_0/Robot")
     if not disable_agv_shell_collision():
         carb.log_warn("AGV_link_1 not found - shell collision stays on")
+    if args_cli.hand_only_collision:
+        n_off = arm_collision_hand_only()
+        print(f"hand-only collision: {n_off} arm colliders stripped",
+              flush=True)
 
     sim.reset()
     print(f"joints: {len(scene['robot'].joint_names)}", flush=True)
@@ -934,11 +976,11 @@ def main() -> None:
             driver.hold_arm(ARM_GRASP.tolist(), 1.0)
             pose = ARM_GRASP.tolist()
 
-            # (lateral alignment: base y at arrival +-0.03 via the
-            # two-phase approach; arm-side trims and base shunts both
-            # re-roll the springy contact drape and made things
-            # worse - the station warm-up above is the reliable
-            # normalizer)
+            # (lateral alignment: three arm-yaw trim attempts all
+            # failed - under contact drape the shoulder yaw has ~no
+            # authority over the jaw center (yaw 0->+0.35, offset
+            # unchanged). The micro-carry loop handles bad bites by
+            # physical test instead.)
             # depth trim: seat the thumb tip 3 cm into the tote's
             # vertical band via pitch (z coupling is the strong axis);
             # iterate - the drape offsets exceed one clipped step
@@ -960,12 +1002,23 @@ def main() -> None:
             # under the board edge - the reverse then jams with the
             # wheels spinning (d17 attempt 5). If the heading is
             # compromised, lift, re-align, and re-descend.
-            for _yaw_try in range(2):
+            for _gate in range(3):
                 _, _, byaw = driver.pose()
-                if abs(byaw) < 0.20:
+                tp_g = n(tote.data.root_pos_w)[0]
+                q_g = n(tote.data.root_quat_w)[0]
+                tilt_g = 2.0 * math.acos(max(-1.0, min(1.0, q_g[3])))
+                knocked = (abs(tp_g[1] - ty) > 0.06
+                           or abs(tp_g[0] - tx) > 0.08
+                           or tilt_g > 0.25)
+                if abs(byaw) < 0.20 and not knocked:
                     break
-                print(f"  yaw gate: base yaw {byaw:+.2f} -> redo "
-                      f"descent", flush=True)
+                why = (f"yaw {byaw:+.2f}" if abs(byaw) >= 0.20
+                       else "tote knocked off slot")
+                if knocked:
+                    reset_tote(tote, slot)
+                    driver.run_seconds(0.4)
+                print(f"  descent gate: {why} -> redo descent",
+                      flush=True)
                 driver.move_arm_slow(ARM_HIGH.tolist(), step=0.06)
                 driver.spin_to(0.0, timeout=10.0)
                 driver.drive_to(standoff, target_y=ty, tol=0.03)
@@ -1002,23 +1055,65 @@ def main() -> None:
                 flush=True,
             )
 
-            # graded slow close with a REAL-contact gate: a stall in
-            # 0.30-0.78 alone is NOT proof - a FREE close reaches
-            # ~0.37 at the 0.4 fraction and reads "HOLDING" with the
-            # tote untouched (probe-verified phantom). A catch is
-            # real only if the tote MOVED during the close (lifted,
-            # nudged, tilted) or the stall sits well past the free-
-            # close level (0.5+). No real catch at 0.4 = re-settle
-            # the drape and re-descend once.
+            # --- close + MICRO-CARRY acceptance ------------------
+            # Stall values proved unreliable as catch-quality
+            # predictors (a free close at 0.6 reaches 0.54-0.56 and
+            # fakes depth; flat/deep thresholds rejected real catches
+            # while deeper bites hooked the board edge and jammed the
+            # base). Accept on physical EVIDENCE (tote moved), then
+            # test the grip DIRECTLY: reverse 5 cm - the tote must
+            # follow. Slip or base-jam -> re-settle and bite again.
             caught = False
+            carry_hold = None
+            tx0 = None
+            bx0 = None
             tote_pre = n(tote.data.root_pos_w)[0][:3]
-            for settle in range(2):
+            for settle in range(4):
                 if settle:
+                    print(f"  re-settle {settle}/3", flush=True)
+                    # a wild round can knock the tote off its slot
+                    # (seen: swept 87 cm sideways) - put it back
+                    tp_r = n(tote.data.root_pos_w)[0]
+                    q_r = n(tote.data.root_quat_w)[0]
+                    tilt_r = 2.0 * math.acos(
+                        max(-1.0, min(1.0, q_r[3])))
+                    if (abs(tp_r[1] - ty) > 0.06
+                            or abs(tp_r[0] - tx) > 0.08
+                            or tilt_r > 0.25):
+                        reset_tote(tote, slot)
+                        driver.run_seconds(0.4)
+                        print("  (tote re-seated after knock)",
+                              flush=True)
+                    # vary the bite a little per round - identical
+                    # re-descents replay the identical missing
+                    # geometry, but too deep hooks the board edge
+                    pose[5] = -0.50 - 0.04 * settle
+                    # lift, restore the standoff (a slipped round
+                    # sits 5 cm back; a jammed one needs the unhook)
+                    # and drop a fresh drape
                     driver.move_arm_slow(ARM_HIGH.tolist(), step=0.06)
                     driver.hold_arm(ARM_HIGH.tolist(), 0.4)
+                    driver.drive_to(standoff, target_y=ty, tol=0.03,
+                                    timeout=30.0)
+                    driver.move_arm_slow(ARM_HIGH.tolist())
                     driver.move_arm_slow(pose, step=0.05, hold=0.2)
                     driver.hold_arm(pose, 0.8)
+                    # re-run the z trim: the fresh drape can again
+                    # leave the tips hovering over the tote top
+                    for _z in range(2):
+                        pos_v = n(driver.robot.data.body_pos_w)[0]
+                        names_v = driver.robot.data.body_names
+                        th_v = pos_v[names_v.index(
+                            "right_hand_thumb_2_link")]
+                        dz = (TOTE_Z + 0.01) - th_v[2]
+                        if abs(dz) <= 0.02:
+                            break
+                        dpt = float(np.clip(dz / 0.378, -0.20, 0.20))
+                        driver.hold_arm(
+                            [pose[0] - dpt] + pose[1:], 0.6)
+                        pose[0] -= dpt
                     tote_pre = n(tote.data.root_pos_w)[0][:3]
+                caught_round = False
                 for frac in (0.4, 0.6, 0.8):
                     close_cmd = driver._baseline()
                     close_cmd[0, driver.finger_ids] = (
@@ -1051,62 +1146,77 @@ def main() -> None:
                           f"near={int(near)} "
                           f"{'HOLDING' if got else '-'}", flush=True)
                     if got:
-                        caught = True
+                        caught_round = True
                         break
                     if fm > 0.78:
                         # jaw closed on AIR (no stall): deeper targets
                         # just make a fist. Abandon the ladder and
                         # re-settle instead.
                         break
-                if caught:
+                if not caught_round:
+                    continue
+
+                # evidence catch -> MICRO-CARRY: the criterion in
+                # miniature, at 1/7 the cost of a failed carry
+                micro_hold = driver._baseline()
+                micro_hold[0, driver.arm_ids] = torch.as_tensor(
+                    pose, dtype=torch.float32, device=driver.device)
+                micro_hold[0, driver.finger_ids] = (
+                    FINGER_CLOSE * 0.6).to(driver.device)
+                if tx0 is None:
+                    tx0 = n(tote.data.root_pos_w)[0][0]
+                    bx0 = driver.pose()[0]
+                bx_m0 = driver.pose()[0]
+                tx_m0 = n(tote.data.root_pos_w)[0][0]
+                driver.back_straight(0.05, speed=0.04,
+                                     arm_hold=micro_hold)
+                bx_moved = bx_m0 - driver.pose()[0]
+                tx_moved = tx_m0 - n(tote.data.root_pos_w)[0][0]
+                ratio = tx_moved / bx_moved if bx_moved > 1e-6 else 0.0
+                print(f"  micro-carry: base {bx_moved * 100:.1f}cm "
+                      f"tote {tx_moved * 100:.1f}cm "
+                      f"({ratio * 100:.0f}%)", flush=True)
+                if bx_moved < 0.03:
+                    # base jammed - the hand is hooked; the re-settle
+                    # arm-lift + drive restores it
+                    print("  micro-carry JAM -> unhook and retry",
+                          flush=True)
+                    continue
+                if tx_moved >= 0.02:
+                    caught = True
+                    carry_hold = micro_hold
                     break
+                print("  micro-carry slipped -> retry", flush=True)
             driver._last_right_pose = list(pose)
             grasps_total += 1
 
-            # firmer grip, then a slow lift to unweight the tote from
-            # the board before any base motion
-            grip_frac = 0.6 if caught else 0.7
-            grip_cmd = driver._baseline()
-            grip_cmd[0, driver.finger_ids] = (
-                FINGER_CLOSE * grip_frac).to(driver.device)
-            grip_pose = list(pose)
-            grip_cmd[0, driver.arm_ids] = torch.as_tensor(
-                grip_pose, dtype=torch.float32, device=driver.device)
-            driver.run_seconds(
-                1.0,
-                every_step=lambda: (
-                    driver.robot.set_joint_position_target(grip_cmd)),
-            )
+            # THE criterion: continue reversing to ~0.37 m total from
+            # the pre-micro position (yaw-locked, arm+fingers held) -
+            # the d7-d10 carry mechanism; legged stop-start reverses
+            # tested worse.
+            if tx0 is None:
+                tx0 = n(tote.data.root_pos_w)[0][0]
+                bx0 = driver.pose()[0]
             if caught:
-                # straight from catch to reverse: no seat press (it
-                # can wedge the arm into a strut base->tote->board
-                # and the wheels just spin - d16), no wiggle, no
-                # lift. The catch state (tote hanging ~3 cm in the
-                # jaw) is exactly what carried in d7-d10.
-                pass
-
-            # THE criterion: ONE continuous 0.35 reverse (equal-wheel,
-            # yaw-locked) holding arm+fingers - the d7-d10 carry
-            # mechanism. Legged reverse-with-re-seat tested WORSE:
-            # stop-start dynamics break the static friction hold and
-            # the re-seats never re-engage.
-            tx0 = n(tote.data.root_pos_w)[0]
-            bx0 = driver.pose()[0]
-            carry_hold = driver._baseline()
-            carry_hold[0, driver.arm_ids] = torch.as_tensor(
-                pose, dtype=torch.float32, device=driver.device)
-            carry_hold[0, driver.finger_ids] = (
-                FINGER_CLOSE * grip_frac).to(driver.device)
-            driver.back_straight(0.35, speed=0.05,
-                                 arm_hold=carry_hold)
+                # flat continuous pull - the d7-d10/d18 mechanism
+                driver.back_straight(0.32, speed=0.05,
+                                     arm_hold=carry_hold)
+            else:
+                fallback = driver._baseline()
+                fallback[0, driver.arm_ids] = torch.as_tensor(
+                    pose, dtype=torch.float32, device=driver.device)
+                fallback[0, driver.finger_ids] = (
+                    FINGER_CLOSE * 0.6).to(driver.device)
+                driver.back_straight(0.35, speed=0.05,
+                                     arm_hold=fallback)
             tx1 = n(tote.data.root_pos_w)[0]
             bx1 = driver.pose()[0]
-            carried = (tx0[0] - tx1[0]) > 0.15
+            carried = (tx0 - tx1[0]) > 0.15
             carry_total += 1
             carry_streak = carry_streak + 1 if carried else 0
             print(
                 f"CARRY TEST {name}: base {bx0:.2f}->{bx1:.2f} "
-                f"tote {tx0[0]:.2f}->{tx1[0]:.2f} "
+                f"tote {tx0:.2f}->{tx1[0]:.2f} "
                 f"-> {'CARRIED' if carried else 'dropped'} "
                 f"[streak {carry_streak}/5, {carry_total} tries]",
                 flush=True,
