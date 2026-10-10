@@ -14,13 +14,45 @@ SESSION=${SESSION:-g1d_arena}
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEMO="${REPO_DIR}/g1d_demo/g1d_pick_place_demo.py"
 
-DESKTOP_DISPLAY=${DESKTOP_DISPLAY:-:1}
-DESKTOP_XAUTH=${DESKTOP_XAUTH:-/run/user/$(id -u)/gdm/Xauthority}
+DESKTOP_DISPLAY=${DESKTOP_DISPLAY:-}
+DESKTOP_XAUTH=${DESKTOP_XAUTH:-}
 COMPOSE="$(command -v docker-compose || echo "$HOME/.local/bin/docker-compose")"
 
-# let container clients open windows on the desktop X server
-DISPLAY="${DESKTOP_DISPLAY}" XAUTHORITY="${DESKTOP_XAUTH}" \
-  xhost +local:docker >/dev/null 2>&1 || true
+detect_x() {
+  # DISPLAY: first live X socket (GDM renumbers sessions per boot)
+  if [ -z "$DESKTOP_DISPLAY" ]; then
+    for s in /tmp/.X11-unix/X[0-9]*; do
+      [ -S "$s" ] && DESKTOP_DISPLAY=":${s##*X}" && break
+    done
+  fi
+  # XAUTHORITY: must be an existing FILE. Docker auto-creates missing
+  # bind sources as DIRECTORIES, and the next start then fails with
+  # "not a directory" (seen after reboots when the /run/user/.../gdm/
+  # Xauthority file vanished and docker left a directory behind).
+  if [ -z "$DESKTOP_XAUTH" ] || [ ! -f "$DESKTOP_XAUTH" ]; then
+    DESKTOP_XAUTH=""
+    for c in "/run/user/$(id -u)/gdm/Xauthority" "$HOME/.Xauthority"; do
+      if [ -f "$c" ]; then DESKTOP_XAUTH="$c"; break; fi
+    done
+  fi
+  [ -n "$DESKTOP_XAUTH" ] || DESKTOP_XAUTH="$HOME/.Xauthority"  # mountable file
+  # the pair must actually connect (a greeter-only :0 or a stale
+  # authority means the container GUI cannot attach)
+  [ -n "$DESKTOP_DISPLAY" ] \
+    && DISPLAY="$DESKTOP_DISPLAY" XAUTHORITY="$DESKTOP_XAUTH" \
+         xhost >/dev/null 2>&1
+}
+
+X_OK=0
+if detect_x; then
+  X_OK=1
+  # let container clients open windows on the desktop X server
+  DISPLAY="${DESKTOP_DISPLAY}" XAUTHORITY="${DESKTOP_XAUTH}" \
+    xhost +local:docker >/dev/null 2>&1 || true
+else
+  echo "No usable desktop X session (DISPLAY=${DESKTOP_DISPLAY:-none}) -"
+  echo "GUI disabled; headless runs still work."
+fi
 
 usage() { grep '^#' "$0" | sed 's/^# \?//'; }
 
@@ -57,9 +89,13 @@ reap_stale_demo() {
 mode=${1:-sim}
 case "$mode" in
 sim | headless)
+  if [ "$mode" = sim ] && [ "$X_OK" != 1 ]; then
+    echo "Falling back to headless (no X session to attach to)."
+    mode=headless
+  fi
   # bring the stack up (idempotent)
   cd "${REPO_DIR}"
-  sg docker -c "env DISPLAY=${DESKTOP_DISPLAY} \
+  sg docker -c "env DISPLAY=${DESKTOP_DISPLAY:-:0} \
     XAUTHORITY=${DESKTOP_XAUTH} ${COMPOSE} up -d" >/dev/null
 
   # kill any demo still running in the container BEFORE restarting

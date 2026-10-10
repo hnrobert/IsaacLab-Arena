@@ -134,8 +134,7 @@ def main() -> None:
             driver.run_seconds(0.2)
             # tuck TIGHT before driving: a half-swung arm is exactly
             # the 0.45 m pole that rams the station face
-            driver.move_arm_slow(ARM_TUCK.tolist(), step=0.12,
-                                 hold=0.06)
+            driver.move_arm_smooth(ARM_TUCK.tolist(), speed=0.9)
             driver.hold_arm(ARM_TUCK.tolist(), 0.1)
             driver.fingers_to(FINGER_OPEN)
 
@@ -164,19 +163,16 @@ def main() -> None:
                 # after every failure resets the streak attempts to
                 # the deterministic configuration.
                 driver.fingers_to(FINGER_OPEN)
-                driver.move_arm_slow(ARM_HIGH.tolist(), step=0.12,
-                                     hold=0.06)
+                driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.9)
                 driver.move_arm_slow(ARM_GRASP.tolist(), step=0.05,
                                      hold=0.2)
                 driver.hold_arm(ARM_GRASP.tolist(), 0.3)
-                driver.move_arm_slow(ARM_HIGH.tolist(), step=0.08,
-                                     hold=0.10)
+                driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.9)
                 reset_tote(tote, slot)
                 driver.run_seconds(0.2)
 
             # slow gateway up, then a fine-stepped descent
-            driver.move_arm_slow(ARM_HIGH.tolist(), step=0.12,
-                                 hold=0.06)
+            driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.9)
             driver.hold_arm(ARM_HIGH.tolist(), 0.2)
             driver.move_arm_slow(ARM_GRASP.tolist(), step=0.05,
                                  hold=0.2)
@@ -200,7 +196,7 @@ def main() -> None:
                 if abs(dz) <= 0.02:
                     break
                 dpt = float(np.clip(dz / 0.378, -0.20, 0.20))
-                driver.hold_arm([pose[0] - dpt] + pose[1:], 0.6)
+                driver.hold_arm([pose[0] - dpt] + pose[1:], 0.5)
                 pose[0] -= dpt
 
             # base-yaw gate: arm-vs-station contact during the
@@ -237,10 +233,10 @@ def main() -> None:
                 DRAPE_OFF[0] = 0.5 * DRAPE_OFF[0] + 0.5 * off
                 ty_eff = float(np.clip(ty - 0.8 * off,
                                        ty - 0.20, ty + 0.20))
-                driver.move_arm_slow(ARM_HIGH.tolist(), step=0.10)
+                driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.9)
                 driver.spin_to(0.0, timeout=10.0)
                 driver.drive_to(standoff, target_y=ty_eff, tol=0.03)
-                driver.move_arm_slow(ARM_HIGH.tolist())
+                driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.9)
                 driver.move_arm_slow(ARM_GRASP.tolist(), step=0.05,
                                      hold=0.2)
                 driver.hold_arm(ARM_GRASP.tolist(), 1.0)
@@ -329,11 +325,11 @@ def main() -> None:
                     # lift, restore the standoff (a slipped round
                     # sits 5 cm back; a jammed one needs the unhook)
                     # and drop a fresh drape
-                    driver.move_arm_slow(ARM_HIGH.tolist(), step=0.06)
+                    driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.9)
                     driver.hold_arm(ARM_HIGH.tolist(), 0.2)
                     driver.drive_to(standoff, target_y=ty_eff,
                                     tol=0.03, timeout=30.0)
-                    driver.move_arm_slow(ARM_HIGH.tolist())
+                    driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.9)
                     driver.move_arm_slow(pose, step=0.05, hold=0.2)
                     driver.hold_arm(pose, 0.4)
                     # re-run the z trim: the fresh drape can again
@@ -359,7 +355,7 @@ def main() -> None:
                     close_cmd[0, driver.arm_ids] = torch.as_tensor(
                         pose, dtype=torch.float32, device=driver.device)
                     driver.run_seconds(
-                        1.0,
+                        0.8,
                         every_step=lambda: (
                             driver.robot.set_joint_position_target(close_cmd)),
                     )
@@ -406,7 +402,7 @@ def main() -> None:
                     bx0 = driver.pose()[0]
                 bx_m0 = driver.pose()[0]
                 tx_m0 = n(tote.data.root_pos_w)[0][0]
-                driver.back_straight(0.05, speed=0.06,
+                driver.back_straight(0.05, speed=0.08,
                                      arm_hold=micro_hold)
                 bx_moved = bx_m0 - driver.pose()[0]
                 tx_moved = tx_m0 - n(tote.data.root_pos_w)[0][0]
@@ -437,7 +433,7 @@ def main() -> None:
                 bx0 = driver.pose()[0]
             if caught:
                 # flat continuous pull - the d7-d10/d18 mechanism
-                driver.back_straight(0.32, speed=0.08,
+                driver.back_straight(0.32, speed=0.09,
                                      arm_hold=carry_hold)
             else:
                 fallback = driver._baseline()
@@ -445,7 +441,7 @@ def main() -> None:
                     pose, dtype=torch.float32, device=driver.device)
                 fallback[0, driver.finger_ids] = (
                     FINGER_CLOSE * 0.6).to(driver.device)
-                driver.back_straight(0.35, speed=0.08,
+                driver.back_straight(0.35, speed=0.09,
                                      arm_hold=fallback)
             tx1 = n(tote.data.root_pos_w)[0]
             bx1 = driver.pose()[0]

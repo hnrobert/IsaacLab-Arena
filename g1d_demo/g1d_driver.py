@@ -180,6 +180,34 @@ class G1DDriver:
             every_step=lambda: self.robot.set_joint_position_target(cmd),
         )
 
+    def move_arm_smooth(self, pose, speed=0.9, timeout=40.0):
+        """Continuously-interpolated arm move: a velocity-limited
+        linear ramp re-targeted EVERY physics step (60 Hz).
+
+        The old step-and-hold ramp (0.05-0.12 rad jumps every
+        0.06-0.2 s) looked stuttery and its discrete JUMPS were what
+        plowed totes on contact - per-step increments of speed*dt
+        (~0.008 rad) stay gentle even at higher rates, so the
+        descent can be faster AND smoother.
+        """
+        pose = list(pose)
+        dt = self.sim.get_physics_dt()
+        deadline = timeout / dt
+        waited = 0
+        while waited < deadline:
+            cur = [n(self.robot.data.joint_pos)[0][
+                self.idx[nm]].item() for nm in RIGHT_ARM]
+            deltas = [t - c for t, c in zip(pose, cur)]
+            if max(abs(d) for d in deltas) < 0.03:
+                self.hold_arm(pose, 0.1)
+                return True
+            cap = speed * dt
+            nxt = [c + max(-cap, min(cap, d))
+                   for c, d in zip(cur, deltas)]
+            self.hold_arm(nxt, dt)
+            waited += 1
+        return False
+
     def move_arm_slow(self, pose, step=0.05, hold=0.15,
                       timeout=40.0):
         """Ramped arm move: 0.05 rad steps from the CURRENT joints.

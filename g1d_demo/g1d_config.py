@@ -12,7 +12,7 @@ WAREHOUSE = os.path.join(REPO, "g1d_demo", "assets", "warehouse")
 
 # GUI render decimation: physics 60 Hz, one rendered frame every
 # RENDER_EVERY steps (headless never renders)
-RENDER_EVERY = 8
+RENDER_EVERY = 6
 
 WHEEL_JOINTS = ["Left_Wheel_Joint", "Right_Wheel_Joint"]
 WHEEL_RADIUS = 0.0845
