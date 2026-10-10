@@ -64,6 +64,11 @@ from g1d_usd import (add_grip_material, arm_collision_hand_only,
                      select_physx_variant)
 
 
+# learned arm-hang offset (jaw center vs tote, y): carried
+# across totes so the FIRST approach already compensates
+DRAPE_OFF = [0.0]
+
+
 def main() -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"sim device: {device}", flush=True)
@@ -126,12 +131,12 @@ def main() -> None:
             tote = scene[name]
             slot = (tx, ty, TOTE_Z)
             reset_tote(tote, slot)
-            driver.run_seconds(0.5)
+            driver.run_seconds(0.2)
             # tuck TIGHT before driving: a half-swung arm is exactly
             # the 0.45 m pole that rams the station face
-            driver.move_arm_slow(ARM_TUCK.tolist(), step=0.08,
-                                 hold=0.10)
-            driver.hold_arm(ARM_TUCK.tolist(), 0.2)
+            driver.move_arm_slow(ARM_TUCK.tolist(), step=0.12,
+                                 hold=0.06)
+            driver.hold_arm(ARM_TUCK.tolist(), 0.1)
             driver.fingers_to(FINGER_OPEN)
 
             standoff = min(tx - 0.40, STANDOFF_CLEAR)
@@ -143,6 +148,9 @@ def main() -> None:
             if not driver.drive_to(pre_wall, target_y=ty, tol=0.05):
                 print(f"{name}: drive to pre-wall FAILED", flush=True)
                 continue
+            # d35-proven endgame: shunt to the line (its closing
+            # spin also straightens the heading - a yawed descent
+            # sweeps the tote) then a plain creep to the standoff
             driver.shunt_lateral(ty, tol=0.03)
             if not driver.drive_to(standoff, target_y=ty, tol=0.02):
                 print(f"{name}: drive to station FAILED", flush=True)
@@ -156,23 +164,23 @@ def main() -> None:
                 # after every failure resets the streak attempts to
                 # the deterministic configuration.
                 driver.fingers_to(FINGER_OPEN)
-                driver.move_arm_slow(ARM_HIGH.tolist(), step=0.08,
-                                     hold=0.10)
+                driver.move_arm_slow(ARM_HIGH.tolist(), step=0.12,
+                                     hold=0.06)
                 driver.move_arm_slow(ARM_GRASP.tolist(), step=0.05,
                                      hold=0.2)
-                driver.hold_arm(ARM_GRASP.tolist(), 0.5)
+                driver.hold_arm(ARM_GRASP.tolist(), 0.3)
                 driver.move_arm_slow(ARM_HIGH.tolist(), step=0.08,
                                      hold=0.10)
                 reset_tote(tote, slot)
-                driver.run_seconds(0.3)
+                driver.run_seconds(0.2)
 
             # slow gateway up, then a fine-stepped descent
-            driver.move_arm_slow(ARM_HIGH.tolist(), step=0.08,
-                                 hold=0.10)
-            driver.hold_arm(ARM_HIGH.tolist(), 0.3)
+            driver.move_arm_slow(ARM_HIGH.tolist(), step=0.12,
+                                 hold=0.06)
+            driver.hold_arm(ARM_HIGH.tolist(), 0.2)
             driver.move_arm_slow(ARM_GRASP.tolist(), step=0.05,
                                  hold=0.2)
-            driver.hold_arm(ARM_GRASP.tolist(), 1.0)
+            driver.hold_arm(ARM_GRASP.tolist(), 0.5)
             pose = ARM_GRASP.tolist()
 
             # (lateral alignment: three arm-yaw trim attempts all
@@ -209,13 +217,13 @@ def main() -> None:
                 knocked = (abs(tp_g[1] - ty) > 0.06
                            or abs(tp_g[0] - tx) > 0.08
                            or tilt_g > 0.25)
-                if abs(byaw) < 0.20 and not knocked:
+                if abs(byaw) < 0.12 and not knocked:
                     break
-                why = (f"yaw {byaw:+.2f}" if abs(byaw) >= 0.20
+                why = (f"yaw {byaw:+.2f}" if abs(byaw) >= 0.12
                        else "tote knocked off slot")
                 if knocked:
                     reset_tote(tote, slot)
-                    driver.run_seconds(0.4)
+                    driver.run_seconds(0.25)
                 print(f"  descent gate: {why} -> redo descent",
                       flush=True)
                 pos_o = n(driver.robot.data.body_pos_w)[0]
@@ -226,9 +234,10 @@ def main() -> None:
                             "right_hand_middle_1_link")]) / 2.0
                 tp_o = n(tote.data.root_pos_w)[0]
                 off = (th_o[1] + pr_o[1]) / 2.0 - tp_o[1]
+                DRAPE_OFF[0] = 0.5 * DRAPE_OFF[0] + 0.5 * off
                 ty_eff = float(np.clip(ty - 0.8 * off,
-                                       ty - 0.12, ty + 0.12))
-                driver.move_arm_slow(ARM_HIGH.tolist(), step=0.06)
+                                       ty - 0.20, ty + 0.20))
+                driver.move_arm_slow(ARM_HIGH.tolist(), step=0.10)
                 driver.spin_to(0.0, timeout=10.0)
                 driver.drive_to(standoff, target_y=ty_eff, tol=0.03)
                 driver.move_arm_slow(ARM_HIGH.tolist())
@@ -290,7 +299,7 @@ def main() -> None:
                             or abs(tp_r[0] - tx) > 0.08
                             or tilt_r > 0.25):
                         reset_tote(tote, slot)
-                        driver.run_seconds(0.4)
+                        driver.run_seconds(0.25)
                         print("  (tote re-seated after knock)",
                               flush=True)
                     # vary the bite a little per round - identical
@@ -311,8 +320,9 @@ def main() -> None:
                             "right_hand_middle_1_link")]) / 2.0
                     tp_o = n(tote.data.root_pos_w)[0]
                     off = (th_o[1] + pr_o[1]) / 2.0 - tp_o[1]
+                    DRAPE_OFF[0] = 0.5 * DRAPE_OFF[0] + 0.5 * off
                     ty_eff = float(np.clip(ty - 0.8 * off,
-                                           ty - 0.12, ty + 0.12))
+                                           ty - 0.20, ty + 0.20))
                     if abs(off) > 0.03:
                         print(f"  base-yaw... drape off={off:+.3f} "
                               f"-> aim y {ty_eff:+.3f}", flush=True)
@@ -320,12 +330,12 @@ def main() -> None:
                     # sits 5 cm back; a jammed one needs the unhook)
                     # and drop a fresh drape
                     driver.move_arm_slow(ARM_HIGH.tolist(), step=0.06)
-                    driver.hold_arm(ARM_HIGH.tolist(), 0.4)
+                    driver.hold_arm(ARM_HIGH.tolist(), 0.2)
                     driver.drive_to(standoff, target_y=ty_eff,
                                     tol=0.03, timeout=30.0)
                     driver.move_arm_slow(ARM_HIGH.tolist())
                     driver.move_arm_slow(pose, step=0.05, hold=0.2)
-                    driver.hold_arm(pose, 0.8)
+                    driver.hold_arm(pose, 0.4)
                     # re-run the z trim: the fresh drape can again
                     # leave the tips hovering over the tote top
                     for _z in range(2):
@@ -349,7 +359,7 @@ def main() -> None:
                     close_cmd[0, driver.arm_ids] = torch.as_tensor(
                         pose, dtype=torch.float32, device=driver.device)
                     driver.run_seconds(
-                        1.2,
+                        1.0,
                         every_step=lambda: (
                             driver.robot.set_joint_position_target(close_cmd)),
                     )
@@ -396,7 +406,7 @@ def main() -> None:
                     bx0 = driver.pose()[0]
                 bx_m0 = driver.pose()[0]
                 tx_m0 = n(tote.data.root_pos_w)[0][0]
-                driver.back_straight(0.05, speed=0.04,
+                driver.back_straight(0.05, speed=0.06,
                                      arm_hold=micro_hold)
                 bx_moved = bx_m0 - driver.pose()[0]
                 tx_moved = tx_m0 - n(tote.data.root_pos_w)[0][0]
@@ -427,7 +437,7 @@ def main() -> None:
                 bx0 = driver.pose()[0]
             if caught:
                 # flat continuous pull - the d7-d10/d18 mechanism
-                driver.back_straight(0.32, speed=0.05,
+                driver.back_straight(0.32, speed=0.08,
                                      arm_hold=carry_hold)
             else:
                 fallback = driver._baseline()
@@ -435,7 +445,7 @@ def main() -> None:
                     pose, dtype=torch.float32, device=driver.device)
                 fallback[0, driver.finger_ids] = (
                     FINGER_CLOSE * 0.6).to(driver.device)
-                driver.back_straight(0.35, speed=0.05,
+                driver.back_straight(0.35, speed=0.08,
                                      arm_hold=fallback)
             tx1 = n(tote.data.root_pos_w)[0]
             bx1 = driver.pose()[0]
@@ -471,7 +481,7 @@ def main() -> None:
             driver.run_seconds(0.3)
             driver.arm_to(ARM_HIGH, tolerance=0.25, timeout=10.0)
             driver.arm_to(ARM_TUCK, tolerance=0.2, timeout=10.0)
-            driver.hold_arm(ARM_TUCK.tolist(), 0.3)
+            driver.hold_arm(ARM_TUCK.tolist(), 0.2)
             driver.drive_to(0.0)
 
         print(f"=== cycle {cycle}: {grasps_ok}/{grasps_total} grasps "

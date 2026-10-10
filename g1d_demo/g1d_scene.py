@@ -156,7 +156,7 @@ class G1DSceneCfg(InteractiveSceneCfg):
     station_beam = AssetBaseCfg(
         prim_path="{ENV_REGEX_NS}/StationBeam",
         spawn=sim_utils.CuboidCfg(
-            size=(0.52, 0.92, 0.04),
+            size=(0.52, 1.12, 0.04),
             collision_props=sim_utils.CollisionPropertiesCfg(),
             visual_material=sim_utils.PreviewSurfaceCfg(
                 diffuse_color=RACK_BEAM
@@ -172,26 +172,15 @@ class G1DSceneCfg(InteractiveSceneCfg):
     pick_board = AssetBaseCfg(
         prim_path="{ENV_REGEX_NS}/PickBoard",
         spawn=sim_utils.CuboidCfg(
-            size=(0.24, 0.5, 0.04),
+            size=(0.24, 1.10, 0.04),
             collision_props=sim_utils.CollisionPropertiesCfg(),
             visual_material=sim_utils.PreviewSurfaceCfg(
                 diffuse_color=STATION_BODY),
         ),
         init_state=AssetBaseCfg.InitialStateCfg(pos=(2.27, 0.0, 0.75)))
-    # small retaining pockets on the pick board: the graded close
-    # still nudges the tote; back + side walls keep it on its slot
-    pocketBB = AssetBaseCfg(
-        prim_path="{ENV_REGEX_NS}/PocketBB",
-        spawn=sim_utils.CuboidCfg(
-            size=(0.02, 0.16, 0.08), collision_props=sim_utils.CollisionPropertiesCfg(),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=RACK_BEAM)),
-        init_state=AssetBaseCfg.InitialStateCfg(pos=(2.345, 0.0, 0.81)))
-    pocketYB = AssetBaseCfg(
-        prim_path="{ENV_REGEX_NS}/PocketYB",
-        spawn=sim_utils.CuboidCfg(
-            size=(0.16, 0.02, 0.08), collision_props=sim_utils.CollisionPropertiesCfg(),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=RACK_BEAM)),
-        init_state=AssetBaseCfg.InitialStateCfg(pos=(2.27, 0.072, 0.81)))
+    # (retaining pockets REMOVED: single-slot-era walls whose lips
+    # sit in the jaw descent band and sweep totes off the off-center
+    # slots; knock-reset handles nudges now)
     pad = AssetBaseCfg(
         prim_path="{ENV_REGEX_NS}/Pad",
         spawn=sim_utils.CuboidCfg(
@@ -208,13 +197,13 @@ class G1DSceneCfg(InteractiveSceneCfg):
     # positions are gone - all five are pick targets now)
     tote_a = make_tote_cfg("tote_a", (2.27, 0.00, TOTE_Z),
                            PICK_TARGETS[0][3])
-    tote_b = make_tote_cfg("tote_b", (2.27, 0.16, TOTE_Z),
+    tote_b = make_tote_cfg("tote_b", (2.27, 0.24, TOTE_Z),
                            PICK_TARGETS[1][3])
-    tote_c = make_tote_cfg("tote_c", (2.27, -0.16, TOTE_Z),
+    tote_c = make_tote_cfg("tote_c", (2.27, -0.24, TOTE_Z),
                            PICK_TARGETS[2][3])
-    tote_d = make_tote_cfg("tote_d", (2.27, 0.32, TOTE_Z),
+    tote_d = make_tote_cfg("tote_d", (2.27, 0.48, TOTE_Z),
                            PICK_TARGETS[3][3])
-    tote_e = make_tote_cfg("tote_e", (2.27, -0.32, TOTE_Z),
+    tote_e = make_tote_cfg("tote_e", (2.27, -0.48, TOTE_Z),
                            PICK_TARGETS[4][3])
 
     robot = ArticulationCfg(

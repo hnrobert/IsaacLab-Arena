@@ -12,12 +12,12 @@ WAREHOUSE = os.path.join(REPO, "g1d_demo", "assets", "warehouse")
 
 # GUI render decimation: physics 60 Hz, one rendered frame every
 # RENDER_EVERY steps (headless never renders)
-RENDER_EVERY = 6
+RENDER_EVERY = 8
 
 WHEEL_JOINTS = ["Left_Wheel_Joint", "Right_Wheel_Joint"]
 WHEEL_RADIUS = 0.0845
 HALF_TRACK = 0.2031
-DRIVE_SPEED = 0.30
+DRIVE_SPEED = 0.40
 HOME_ROOT_Z = 0.113  # WHEEL_JOINT_Z + WHEEL_RADIUS + hover
 
 RIGHT_ARM = [
@@ -65,10 +65,10 @@ STANDOFF_CLEAR = 1.84     # physics wall: AGV nose hits the 2.20 edge
 # services all five totes in sequence - multiple picks per visit.
 PICK_TARGETS = (
     ("tote_a", 2.27, 0.00, (0.9, 0.45, 0.1)),
-    ("tote_b", 2.27, 0.16, (0.1, 0.6, 0.9)),
-    ("tote_c", 2.27, -0.16, (0.2, 0.8, 0.3)),
-    ("tote_d", 2.27, 0.32, (0.8, 0.2, 0.6)),
-    ("tote_e", 2.27, -0.32, (0.3, 0.7, 0.8)),
+    ("tote_b", 2.27, 0.24, (0.1, 0.6, 0.9)),
+    ("tote_c", 2.27, -0.24, (0.2, 0.8, 0.3)),
+    ("tote_d", 2.27, 0.48, (0.8, 0.2, 0.6)),
+    ("tote_e", 2.27, -0.48, (0.3, 0.7, 0.8)),
 )
 TOTE_NAMES = tuple(e[0] for e in PICK_TARGETS)
 
