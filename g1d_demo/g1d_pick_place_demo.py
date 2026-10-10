@@ -128,6 +128,7 @@ def main() -> None:
         print(f"=== cycle {cycle} ===", flush=True)
 
         for name, tx, ty, _color in PICK_TARGETS:
+            t0_steps = stepper.steps
             tote = scene[name]
             slot = (tx, ty, TOTE_Z)
             reset_tote(tote, slot)
@@ -166,14 +167,14 @@ def main() -> None:
                 driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.9)
                 driver.move_arm_slow(ARM_GRASP.tolist(), step=0.05,
                                      hold=0.2)
-                driver.hold_arm(ARM_GRASP.tolist(), 0.3)
+                driver.hold_arm(ARM_GRASP.tolist(), 0.2)
                 driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.9)
                 reset_tote(tote, slot)
                 driver.run_seconds(0.2)
 
             # slow gateway up, then a fine-stepped descent
             driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.9)
-            driver.hold_arm(ARM_HIGH.tolist(), 0.2)
+            driver.hold_arm(ARM_HIGH.tolist(), 0.15)
             driver.move_arm_slow(ARM_GRASP.tolist(), step=0.05,
                                  hold=0.2)
             driver.hold_arm(ARM_GRASP.tolist(), 0.5)
@@ -196,7 +197,7 @@ def main() -> None:
                 if abs(dz) <= 0.02:
                     break
                 dpt = float(np.clip(dz / 0.378, -0.20, 0.20))
-                driver.hold_arm([pose[0] - dpt] + pose[1:], 0.5)
+                driver.hold_arm([pose[0] - dpt] + pose[1:], 0.4)
                 pose[0] -= dpt
 
             # base-yaw gate: arm-vs-station contact during the
@@ -355,7 +356,7 @@ def main() -> None:
                     close_cmd[0, driver.arm_ids] = torch.as_tensor(
                         pose, dtype=torch.float32, device=driver.device)
                     driver.run_seconds(
-                        0.8,
+                        0.7,
                         every_step=lambda: (
                             driver.robot.set_joint_position_target(close_cmd)),
                     )
@@ -402,7 +403,7 @@ def main() -> None:
                     bx0 = driver.pose()[0]
                 bx_m0 = driver.pose()[0]
                 tx_m0 = n(tote.data.root_pos_w)[0][0]
-                driver.back_straight(0.05, speed=0.08,
+                driver.back_straight(0.05, speed=0.09,
                                      arm_hold=micro_hold)
                 bx_moved = bx_m0 - driver.pose()[0]
                 tx_moved = tx_m0 - n(tote.data.root_pos_w)[0][0]
@@ -433,7 +434,7 @@ def main() -> None:
                 bx0 = driver.pose()[0]
             if caught:
                 # flat continuous pull - the d7-d10/d18 mechanism
-                driver.back_straight(0.32, speed=0.09,
+                driver.back_straight(0.32, speed=0.10,
                                      arm_hold=carry_hold)
             else:
                 fallback = driver._baseline()
@@ -441,7 +442,7 @@ def main() -> None:
                     pose, dtype=torch.float32, device=driver.device)
                 fallback[0, driver.finger_ids] = (
                     FINGER_CLOSE * 0.6).to(driver.device)
-                driver.back_straight(0.35, speed=0.09,
+                driver.back_straight(0.35, speed=0.10,
                                      arm_hold=fallback)
             tx1 = n(tote.data.root_pos_w)[0]
             bx1 = driver.pose()[0]
@@ -452,7 +453,8 @@ def main() -> None:
                 f"CARRY TEST {name}: base {bx0:.2f}->{bx1:.2f} "
                 f"tote {tx0:.2f}->{tx1[0]:.2f} "
                 f"-> {'CARRIED' if carried else 'dropped'} "
-                f"[streak {carry_streak}/5, {carry_total} tries]",
+                f"[streak {carry_streak}/5, {carry_total} tries] "
+                f"({(stepper.steps - t0_steps) / 60.0:.0f}s)",
                 flush=True,
             )
             got = carried
@@ -474,11 +476,12 @@ def main() -> None:
             else:
                 reset_tote(tote, slot)
                 print(f"re-seated {name} on the station", flush=True)
-            driver.run_seconds(0.3)
+            driver.run_seconds(0.2)
             driver.arm_to(ARM_HIGH, tolerance=0.25, timeout=10.0)
             driver.arm_to(ARM_TUCK, tolerance=0.2, timeout=10.0)
             driver.hold_arm(ARM_TUCK.tolist(), 0.2)
-            driver.drive_to(0.0)
+            # NO home return: the next tote is on THIS station - the
+            # 1.8 m round trip cost 16-20 s of pure driving per tote
 
         print(f"=== cycle {cycle}: {grasps_ok}/{grasps_total} grasps "
               f"lifted ===", flush=True)

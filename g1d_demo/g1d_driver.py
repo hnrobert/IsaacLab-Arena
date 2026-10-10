@@ -24,8 +24,10 @@ class RenderStepper:
         self.headless = headless
         self.every = max(1, every)
         self._count = 0
+        self.steps = 0  # total physics steps (sim-time clock)
 
     def step(self, sim) -> None:
+        self.steps += 1
         if self.headless:
             sim.step(render=False)
             return
