@@ -39,7 +39,10 @@ ARM_HOME = torch.tensor([0.0, 0.1, 0.0, 0.3, 0.0, 0.0, 0.0])
 # GPU-calibrated top pinch: thumb hull at (2.22, 0, 0.91) and middle
 # hull at (2.33, 0, 0.97) - a centered over-the-top squeeze, so the
 # tote just rests on a plain board (no posts, no pockets)
-ARM_GRASP = torch.tensor([-0.7, 0.0, 0.0, 0.9, -0.8, -0.5, 0.0])
+# elbow 1.05 (was 0.9): probe-verified on the 595.99.02
+# landscape - a more vertical touchdown halves the descent
+# knock (16.5 -> 8.3 cm) and the close genuinely stalls
+ARM_GRASP = torch.tensor([-0.7, 0.0, 0.0, 1.05, -0.8, -0.5, 0.0])
 # approach gateway: swinging straight from the tuck clips the station
 # lip, so the arm first goes UP, then pitches down onto the slot
 ARM_HIGH = torch.tensor([-1.25, 0.0, 0.0, 0.9, -0.8, -0.8, 0.0])
@@ -58,7 +61,9 @@ STATION_X = 2.45          # replenishment station center (near edge 2.20)
 STATION_TOP = 0.80
 PAD_POS = (-1.0, 0.0, 0.005)
 TOTE_SIZE = 0.12          # fills the 11.7 cm thumb-to-middle gap at wrist -0.5
-TOTE_Z = 0.77 + TOTE_SIZE / 2 + 0.005  # board top + half tote
+TOTE_Z = 0.805 + TOTE_SIZE / 2 + 0.005  # post top + half tote
+# (posts lift the totes 4 cm into free air: fingers close on
+# the tote body only - no board-contact grasp chaos)
 STANDOFF_CLEAR = 1.84     # physics wall: AGV nose hits the 2.20 edge
 
 # FIVE pick slots across the 0.9 m board (y +-0.45): every cycle

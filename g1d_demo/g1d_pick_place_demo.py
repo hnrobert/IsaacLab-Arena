@@ -66,7 +66,10 @@ from g1d_usd import (add_grip_material, arm_collision_hand_only,
 
 # learned arm-hang offset (jaw center vs tote, y): carried
 # across totes so the FIRST approach already compensates
-DRAPE_OFF = [0.0]
+# seeded 0.06: with the stiff wrist group the contact torque
+# now rotates the BASE (+0.13 rad during the descent, ~6 cm
+# tip shift on the 0.5 m arm lever) - start pre-compensated
+DRAPE_OFF = [0.06]
 
 
 def main() -> None:
@@ -151,12 +154,26 @@ def main() -> None:
             # d35-proven endgame: shunt to the line (its closing
             # spin also straightens the heading - a yawed descent
             # sweeps the tote) then a plain creep to the standoff
-            driver.shunt_lateral(ty, tol=0.03)
-            if not driver.drive_to(standoff, target_y=ty, tol=0.02):
+            # NEW-DRIVER LANDSCAPE (595.99.02): the drape hangs the
+            # jaw +5.5-8.4 cm past the tote EVEN on the center slot
+            # (mined from sm3/fast1 tip data). Aim the base the same
+            # amount back on the FIRST attempt; the damped DRAPE_OFF
+            # learning refines it across retries.
+            ty_eff0 = float(np.clip(
+                ty - 0.8 * DRAPE_OFF[0] - 0.055, ty - 0.22, ty + 0.10))
+            if not driver.drive_to(standoff, target_y=ty_eff0,
+                                   tol=0.02):
                 print(f"{name}: drive to station FAILED", flush=True)
                 continue
+            # the short 0.4 m reposition leg (no home return anymore)
+            # leaves the heading yawed ~+0.12 and a yawed descent
+            # sweeps the tote + loops the yaw gate - straighten now
+            driver.spin_to(0.0, timeout=6.0)
+            print(f"  t+{(stepper.steps - t0_steps) / 60.0:.0f}s "
+                  f"arrived", flush=True)
 
-            if cycle == 1 or carry_streak == 0:
+            if False:  # warm-up skipped: 30 s/tote on a stale
+                      # landscape; retries carry the adaption
                 # station warm-up: rehearse the whole descent chain
                 # once ON the station apron, then re-seat the tote.
                 # Warm-up'd attempts carried 4/4 (d7-d10); without it
@@ -165,19 +182,25 @@ def main() -> None:
                 # the deterministic configuration.
                 driver.fingers_to(FINGER_OPEN)
                 driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.9)
-                driver.move_arm_slow(ARM_GRASP.tolist(), step=0.05,
-                                     hold=0.2)
+                driver.move_arm_slow(ARM_GRASP.tolist(), step=0.06,
+                                     hold=0.15)
                 driver.hold_arm(ARM_GRASP.tolist(), 0.2)
                 driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.9)
                 reset_tote(tote, slot)
                 driver.run_seconds(0.2)
 
-            # slow gateway up, then a fine-stepped descent
-            driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.9)
+            # slow gateway up, then a fine-stepped descent - the
+            # gateway lift stays GENTLE: a 0.9 rad/s ramp slings
+            # oscillation into the descent and the wrist yaw
+            # deflects 0.8 rad on first contact (probe-vs-demo delta)
+            driver.move_arm_slow(ARM_HIGH.tolist(), step=0.06,
+                                 hold=0.15)
             driver.hold_arm(ARM_HIGH.tolist(), 0.15)
-            driver.move_arm_slow(ARM_GRASP.tolist(), step=0.05,
-                                 hold=0.2)
+            driver.move_arm_slow(ARM_GRASP.tolist(), step=0.06,
+                                 hold=0.15)
             driver.hold_arm(ARM_GRASP.tolist(), 0.5)
+            print(f"  t+{(stepper.steps - t0_steps) / 60.0:.0f}s "
+                  f"descended", flush=True)
             pose = ARM_GRASP.tolist()
 
             # (lateral alignment: three arm-yaw trim attempts all
@@ -193,7 +216,7 @@ def main() -> None:
                 pos_v = n(driver.robot.data.body_pos_w)[0]
                 names_v = driver.robot.data.body_names
                 th_v = pos_v[names_v.index("right_hand_thumb_2_link")]
-                dz = (TOTE_Z + 0.01) - th_v[2]
+                dz = (TOTE_Z + 0.04) - th_v[2]
                 if abs(dz) <= 0.02:
                     break
                 dpt = float(np.clip(dz / 0.378, -0.20, 0.20))
@@ -206,23 +229,26 @@ def main() -> None:
             # under the board edge - the reverse then jams with the
             # wheels spinning (d17 attempt 5). If the heading is
             # compromised, lift, re-align, and re-descend.
-            for _gate in range(3):
+            for _gate in range(2):
                 _, _, byaw = driver.pose()
                 tp_g = n(tote.data.root_pos_w)[0]
                 q_g = n(tote.data.root_quat_w)[0]
                 tilt_g = 2.0 * math.acos(max(-1.0, min(1.0, q_g[3])))
-                knocked = (abs(tp_g[1] - ty) > 0.06
-                           or abs(tp_g[0] - tx) > 0.08
-                           or tilt_g > 0.25)
-                if abs(byaw) < 0.12 and not knocked:
-                    break
-                why = (f"yaw {byaw:+.2f}" if abs(byaw) >= 0.12
-                       else "tote knocked off slot")
-                if knocked:
+                tilt_bad = tilt_g > 0.25
+                if tilt_bad:
                     reset_tote(tote, slot)
                     driver.run_seconds(0.25)
-                print(f"  descent gate: {why} -> redo descent",
-                      flush=True)
+                if abs(byaw) < 0.10 and not tilt_bad:
+                    break
+                # a displaced (not tipped) tote: re-seat it under the
+                # jaw and close - the knock is chaotic per descent,
+                # redoing the approach just re-rolls it
+                if (abs(tp_g[1] - ty) > 0.10
+                        or abs(tp_g[0] - tx) > 0.12):
+                    reset_tote(tote, slot)
+                    driver.run_seconds(0.25)
+                print(f"  descent gate: yaw {byaw:+.2f} "
+                      f"-> redo descent", flush=True)
                 pos_o = n(driver.robot.data.body_pos_w)[0]
                 nm_o = driver.robot.data.body_names
                 th_o = pos_o[nm_o.index("right_hand_thumb_2_link")]
@@ -231,15 +257,16 @@ def main() -> None:
                             "right_hand_middle_1_link")]) / 2.0
                 tp_o = n(tote.data.root_pos_w)[0]
                 off = (th_o[1] + pr_o[1]) / 2.0 - tp_o[1]
-                DRAPE_OFF[0] = 0.5 * DRAPE_OFF[0] + 0.5 * off
+                if abs(off) < 0.15:
+                        DRAPE_OFF[0] = 0.5 * DRAPE_OFF[0] + 0.5 * off
                 ty_eff = float(np.clip(ty - 0.8 * off,
                                        ty - 0.20, ty + 0.20))
                 driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.9)
                 driver.spin_to(0.0, timeout=10.0)
                 driver.drive_to(standoff, target_y=ty_eff, tol=0.03)
                 driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.9)
-                driver.move_arm_slow(ARM_GRASP.tolist(), step=0.05,
-                                     hold=0.2)
+                driver.move_arm_slow(ARM_GRASP.tolist(), step=0.06,
+                                     hold=0.15)
                 driver.hold_arm(ARM_GRASP.tolist(), 1.0)
                 pose = ARM_GRASP.tolist()
 
@@ -283,17 +310,19 @@ def main() -> None:
             tx0 = None
             bx0 = None
             tote_pre = n(tote.data.root_pos_w)[0][:3]
-            for settle in range(4):
+            for settle in range(3):
                 if settle:
-                    print(f"  re-settle {settle}/3", flush=True)
+                    cheap = settle % 2 == 1
+                    print(f"  re-settle {settle}/3"
+                          f"{' (cheap)' if cheap else ''}", flush=True)
                     # a wild round can knock the tote off its slot
                     # (seen: swept 87 cm sideways) - put it back
                     tp_r = n(tote.data.root_pos_w)[0]
                     q_r = n(tote.data.root_quat_w)[0]
                     tilt_r = 2.0 * math.acos(
                         max(-1.0, min(1.0, q_r[3])))
-                    if (abs(tp_r[1] - ty) > 0.06
-                            or abs(tp_r[0] - tx) > 0.08
+                    if (abs(tp_r[1] - ty) > 0.10
+                            or abs(tp_r[0] - tx) > 0.12
                             or tilt_r > 0.25):
                         reset_tote(tote, slot)
                         driver.run_seconds(0.25)
@@ -302,7 +331,35 @@ def main() -> None:
                     # vary the bite a little per round - identical
                     # re-descents replay the identical missing
                     # geometry, but too deep hooks the board edge
-                    pose[5] = -0.50 - 0.04 * settle
+                    # round variation goes UP: the drive-in drape
+                    # lands the thumb ~4 cm LOW vs the clean probe
+                    # (z 0.837 vs 0.879) - opening the wrist lifts
+                    # the bite onto the tote top
+                    pose[5] = -0.50 + 0.03 * settle
+                    if cheap:
+                        # cheap round: skip the expensive lift+drive
+                        # re-approach - small pitch bump, re-descend
+                        # from HERE, re-trim, close again (~15 s vs
+                        # ~50 s per round; the catch is a per-round
+                        # lottery so round COST is the cycle time)
+                        pose[0] += 0.05
+                        driver.move_arm_slow(pose, step=0.06,
+                                             hold=0.15)
+                        for _z in range(2):
+                            pos_v = n(driver.robot.data.body_pos_w)[0]
+                            names_v = driver.robot.data.body_names
+                            th_v = pos_v[names_v.index(
+                                "right_hand_thumb_2_link")]
+                            dz = (TOTE_Z + 0.04) - th_v[2]
+                            if abs(dz) <= 0.02:
+                                break
+                            dpt = float(np.clip(dz / 0.378,
+                                                -0.20, 0.20))
+                            driver.hold_arm(
+                                [pose[0] - dpt] + pose[1:], 0.5)
+                            pose[0] -= dpt
+                        tote_pre = n(tote.data.root_pos_w)[0][:3]
+                        continue
                     # BASE-SIDE drape compensation: on the off-center
                     # slots the arm hangs 5-7 cm past the tote; the
                     # arm cannot be trimmed, but the BASE aims true -
@@ -317,7 +374,8 @@ def main() -> None:
                             "right_hand_middle_1_link")]) / 2.0
                     tp_o = n(tote.data.root_pos_w)[0]
                     off = (th_o[1] + pr_o[1]) / 2.0 - tp_o[1]
-                    DRAPE_OFF[0] = 0.5 * DRAPE_OFF[0] + 0.5 * off
+                    if abs(off) < 0.15:
+                        DRAPE_OFF[0] = 0.5 * DRAPE_OFF[0] + 0.5 * off
                     ty_eff = float(np.clip(ty - 0.8 * off,
                                            ty - 0.20, ty + 0.20))
                     if abs(off) > 0.03:
@@ -329,9 +387,9 @@ def main() -> None:
                     driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.9)
                     driver.hold_arm(ARM_HIGH.tolist(), 0.2)
                     driver.drive_to(standoff, target_y=ty_eff,
-                                    tol=0.03, timeout=30.0)
+                                    tol=0.03, timeout=15.0)
                     driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.9)
-                    driver.move_arm_slow(pose, step=0.05, hold=0.2)
+                    driver.move_arm_slow(pose, step=0.06, hold=0.15)
                     driver.hold_arm(pose, 0.4)
                     # re-run the z trim: the fresh drape can again
                     # leave the tips hovering over the tote top
@@ -340,7 +398,7 @@ def main() -> None:
                         names_v = driver.robot.data.body_names
                         th_v = pos_v[names_v.index(
                             "right_hand_thumb_2_link")]
-                        dz = (TOTE_Z + 0.01) - th_v[2]
+                        dz = (TOTE_Z + 0.04) - th_v[2]
                         if abs(dz) <= 0.02:
                             break
                         dpt = float(np.clip(dz / 0.378, -0.20, 0.20))
@@ -348,6 +406,17 @@ def main() -> None:
                             [pose[0] - dpt] + pose[1:], 0.6)
                         pose[0] -= dpt
                     tote_pre = n(tote.data.root_pos_w)[0][:3]
+                # fight the contact-deflected wrist yaw: the drive-in
+                # drape + descent contact rotate the jaw up to 0.8 rad
+                # (tips shift ~24 cm lateral) - command the measured
+                # deflection back so the jaw lands square on the tote
+                jp_w = n(driver.robot.data.joint_pos)[0]
+                wyaw = jp_w[driver.idx[
+                    "right_wrist_yaw_joint"]].item()
+                if abs(wyaw) > 0.25:
+                    pose = list(pose)
+                    pose[6] = float(np.clip(-0.8 * wyaw, -0.8, 0.8))
+                    driver.hold_arm(pose, 0.4)
                 caught_round = False
                 for frac in (0.4, 0.6, 0.8):
                     close_cmd = driver._baseline()
@@ -422,6 +491,8 @@ def main() -> None:
                     carry_hold = micro_hold
                     break
                 print("  micro-carry slipped -> retry", flush=True)
+            print(f"  t+{(stepper.steps - t0_steps) / 60.0:.0f}s "
+                  f"close done", flush=True)
             driver._last_right_pose = list(pose)
             grasps_total += 1
 

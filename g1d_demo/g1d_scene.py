@@ -192,6 +192,45 @@ class G1DSceneCfg(InteractiveSceneCfg):
         init_state=AssetBaseCfg.InitialStateCfg(pos=PAD_POS),
     )
 
+    # presenting posts: each tote sits on a small post, body in
+    # free air ~4 cm above the board - the fingers close on the tote
+    # only (no board contact = no knock/tip/lip chaos)
+    post_a = AssetBaseCfg(
+        prim_path="{ENV_REGEX_NS}/PostA",
+        spawn=sim_utils.CuboidCfg(size=(0.04, 0.04, 0.035),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(
+                diffuse_color=RACK_BEAM)),
+        init_state=AssetBaseCfg.InitialStateCfg(pos=(2.27, 0.00, 0.7875)))
+    post_b = AssetBaseCfg(
+        prim_path="{ENV_REGEX_NS}/PostB",
+        spawn=sim_utils.CuboidCfg(size=(0.04, 0.04, 0.035),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(
+                diffuse_color=RACK_BEAM)),
+        init_state=AssetBaseCfg.InitialStateCfg(pos=(2.27, 0.24, 0.7875)))
+    post_c = AssetBaseCfg(
+        prim_path="{ENV_REGEX_NS}/PostC",
+        spawn=sim_utils.CuboidCfg(size=(0.04, 0.04, 0.035),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(
+                diffuse_color=RACK_BEAM)),
+        init_state=AssetBaseCfg.InitialStateCfg(pos=(2.27, -0.24, 0.7875)))
+    post_d = AssetBaseCfg(
+        prim_path="{ENV_REGEX_NS}/PostD",
+        spawn=sim_utils.CuboidCfg(size=(0.04, 0.04, 0.035),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(
+                diffuse_color=RACK_BEAM)),
+        init_state=AssetBaseCfg.InitialStateCfg(pos=(2.27, 0.48, 0.7875)))
+    post_e = AssetBaseCfg(
+        prim_path="{ENV_REGEX_NS}/PostE",
+        spawn=sim_utils.CuboidCfg(size=(0.04, 0.04, 0.035),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(
+                diffuse_color=RACK_BEAM)),
+        init_state=AssetBaseCfg.InitialStateCfg(pos=(2.27, -0.48, 0.7875)))
+
     # --- pick targets on the station board ---
     # every tote spawns ON its station slot (the rack dressing
     # positions are gone - all five are pick targets now)
@@ -222,14 +261,30 @@ class G1DSceneCfg(InteractiveSceneCfg):
             "body": ImplicitActuatorCfg(
                 # exclude the wheels: an overlapping ".*" would give
                 # them the 800-stiffness position drive and brake the
-                # base
+                # base. Also excludes the wrists - they get their own
+                # stiff group below.
                 joint_names_expr=[
-                    "^(?!Left_Wheel_Joint$|Right_Wheel_Joint$).*$"
+                    "^(?!Left_Wheel_Joint$|Right_Wheel_Joint$"
+                    "|left_wrist_(roll|pitch|yaw)_joint$"
+                    "|right_wrist_(roll|pitch|yaw)_joint$).*$"
                 ],
                 effort_limit_sim=200.0,
                 velocity_limit_sim=100.0,
                 stiffness=800.0,
                 damping=40.0,
+            ),
+            # dedicated WRIST group: under descent contact the wrist
+            # yaw deflected 0.8 rad (jaw rotates 47 deg, tips shift
+            # 24 cm lateral -> every phantom close round). 3x the
+            # stiffness should hold the jaw square on the tote.
+            "wrists": ImplicitActuatorCfg(
+                joint_names_expr=[
+                    "^(left|right)_wrist_(roll|pitch|yaw)_joint$"
+                ],
+                effort_limit_sim=200.0,
+                velocity_limit_sim=100.0,
+                stiffness=2400.0,
+                damping=60.0,
             ),
         },
     )

@@ -182,7 +182,7 @@ class G1DDriver:
             every_step=lambda: self.robot.set_joint_position_target(cmd),
         )
 
-    def move_arm_smooth(self, pose, speed=0.9, timeout=40.0):
+    def move_arm_smooth(self, pose, speed=0.9, timeout=10.0):
         """Continuously-interpolated arm move: a velocity-limited
         linear ramp re-targeted EVERY physics step (60 Hz).
 
@@ -211,7 +211,7 @@ class G1DDriver:
         return False
 
     def move_arm_slow(self, pose, step=0.05, hold=0.15,
-                      timeout=40.0):
+                      timeout=10.0):
         """Ramped arm move: 0.05 rad steps from the CURRENT joints.
 
         Step commands with the 800-stiffness drive snap the arm in
@@ -330,9 +330,9 @@ class G1DDriver:
             # the line with a shunt, or accept a loose arrival.
             # Compare over an 8 s WINDOW - at crawl speed the base
             # moves ~1 mm/step, so per-step diffs always look stuck.
-            if (waited - ref_t) >= int(8.0 / dt):
+            if (waited - ref_t) >= int(4.0 / dt):
                 if abs(x - ref_x) < 0.01:
-                    if shunts < 2:
+                    if shunts < 1:
                         shunts += 1
                         print(f"drive stalled x={x:.3f} y={y:+.3f} "
                               f"-> shunt", flush=True)
