@@ -141,14 +141,48 @@ def main() -> None:
             # --- approach: two-phase drive, arm stays raised -----
             standoff = min(tx - 0.40, STANDOFF_CLEAR)
             pre_wall = standoff - 0.25
-            if not driver.drive_to(pre_wall, target_y=ty, tol=0.05):
+            # extreme slot-to-slot jumps need up to ~0.9 m of y -
+            # more than one tracker leg can close - so add an early
+            # runway waypoint when far off the slot line
+            _, by_pre, _ = driver.pose()
+            if abs(by_pre - ty) > 0.25:
+                driver.drive_to(pre_wall - 0.90, target_y=ty, tol=0.08, timeout=45.0, lat_cap=0.55)
+            # converge y AT THE PRE-WALL (an angled nose still
+            # clears the station face here), then square up and
+            # creep the last 0.25 m dead-straight - any yaw at the
+            # standoff digs a nose corner into the face
+            if not driver.drive_to(pre_wall, target_y=ty, tol=0.05, lat_cap=0.55):
                 print(f"{name}: drive to pre-wall FAILED", flush=True)
                 continue
+            driver.spin_to(0.0, timeout=8.0)
             if not driver.drive_to(standoff, target_y=ty, tol=0.03):
                 print(f"{name}: drive to station FAILED", flush=True)
                 continue
             driver.spin_to(0.0, timeout=6.0)
+            # the snap radius covers ~0.20 m of lateral - one
+            # runway retry if y is still wider than that, else
+            # let the tote go to the next cycle
+            for _trim in range(1):
+                _, by_now, _ = driver.pose()
+                if abs(by_now - ty) < 0.18:
+                    break
+                print(f"  y-trim runway: {by_now:+.2f} -> {ty:+.2f}", flush=True)
+                driver.back_straight(0.55, speed=0.12)
+                driver.spin_to(0.0, timeout=8.0)
+                driver.drive_to(pre_wall, target_y=ty, tol=0.05, lat_cap=0.55, timeout=30.0)
+                driver.spin_to(0.0, timeout=8.0)
+                driver.drive_to(standoff, target_y=ty, tol=0.03, timeout=15.0)
+                driver.spin_to(0.0, timeout=6.0)
             print(f"  t+{(stepper.steps - t0_steps) / 60.0:.0f}s arrived", flush=True)
+
+            # knock recovery: a yawed approach can sweep a tote off
+            # its post (tote_d twice found ~0.4 m away on the
+            # floor) - re-seat it before arming the descent
+            tp_chk = n(tote.data.root_pos_w)[0]
+            if abs(tp_chk[1] - ty) > 0.10 or abs(tp_chk[0] - tx) > 0.12 or abs(tp_chk[2] - TOTE_Z) > 0.05:
+                reset_tote(tote, slot)
+                driver.run_seconds(0.2)
+                print("  (tote re-seated after approach knock)", flush=True)
 
             # --- REDUCED descent + proximity snap -----------------
             # swing out OVER the slot, then a small elbow dip - the
@@ -157,31 +191,44 @@ def main() -> None:
             driver.move_arm_smooth(ARM_HOVER.tolist(), speed=0.6)
             driver.hold_arm(ARM_HOVER.tolist(), 0.2)
             driver.arm_capture(tote)
-            pose = ARM_HOVER.tolist()
-            for elbow in (float(ARM_DOCK[3]), float(ARM_GRASP[3])):
+            # small SHOULDER dips only, and the ramp ABORTS the
+            # instant the snap fires - the arm never presses onto
+            # the tote/post (that press was the pickup jitter)
+            for dip in (ARM_DOCK.tolist(), ARM_GRASP.tolist()):
                 if driver._attach is not None:
                     break
-                pose[3] = elbow
-                driver.move_arm_slow(pose, step=0.05, hold=0.15)
+                driver.move_arm_slow(dip, step=0.05, hold=0.15, abort_attach=True)
             driver.disarm_capture()
             if driver._attach is None:
-                print(f"{name}: snap FAILED - skipped", flush=True)
+                hc = driver.hand_center()
+                tp_f = n(tote.data.root_pos_w)[0]
+                print(
+                    f"{name}: snap FAILED - skipped "
+                    f"(jaw=({hc[0]:.2f},{hc[1]:+.2f},{hc[2]:.2f}) "
+                    f"tote=({tp_f[0]:.2f},{tp_f[1]:+.2f},{tp_f[2]:.2f}) "
+                    f"dist={math.dist(hc.tolist(), tp_f[:3].tolist()):.2f})",
+                    flush=True,
+                )
                 driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.6)
                 continue
             picks += 1
             print(f"  t+{(stepper.steps - t0_steps) / 60.0:.0f}s snapped", flush=True)
 
-            # --- wrap + visible lift ------------------------------
+            # --- lift clear FIRST, then wrap -----------------------
+            # freeze the arm where the snap fired (mid-dip), rise
+            # off the post, and only then close the cradle - the
+            # glued tote rides just above the post top right now
+            pose = driver.right_arm_now()
+            lift = list(pose)
+            lift[0] -= 0.15  # rise ~12 cm before any base motion
+            driver.move_arm_smooth(lift, speed=0.6)
             cradle = (FINGER_CLOSE * FINGER_CRADLE).tolist()
-            wrap = hold_cmd(driver, pose, cradle)
+            wrap = hold_cmd(driver, lift, cradle)
             driver.run_seconds(
-                0.35,
+                0.3,
                 every_step=lambda: (driver.robot.set_joint_position_target(wrap)),
             )
-            lift = list(pose)
-            lift[0] -= 0.10  # rise 10 cm before any base motion
-            driver.move_arm_smooth(lift, speed=0.5)
-            carry_hold = hold_cmd(driver, lift, cradle)
+            carry_hold = wrap
 
             # --- clear the station, U-turn 180 deg ----------------
             # spinning at the standoff grinds the nose on the

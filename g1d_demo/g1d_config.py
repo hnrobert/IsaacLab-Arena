@@ -40,21 +40,29 @@ ARM_HOME = torch.tensor([0.0, 0.1, 0.0, 0.3, 0.0, 0.0, 0.0])
 # elbow 1.05 (was 0.9): probe-verified on the 595.99.02
 # landscape - a more vertical touchdown halves the descent
 # knock (16.5 -> 8.3 cm) and the close genuinely stalls
-# deep fallback only: the snap radius normally fires well before
-# this pose is reached - it exists so a bad drape still attaches
-ARM_GRASP = torch.tensor([-0.7, 0.0, 0.0, 1.05, -0.8, -0.5, 0.0])
+# deep fallback only: the snap radius normally fires at/before
+# DOCK - it exists so a bad drape still attaches. Probe-calibrated
+# (g1d_probe.py): jaw z ~0.92 at this pose, ~5 cm over the tote
+ARM_GRASP = torch.tensor([-0.50, 0.0, 0.0, 0.80, 0.0, -0.90, 0.0])
 # travel pose: the arm rides UP from the very start (user spec) -
-# over the station lip, nothing to clip in the aisle
-ARM_HIGH = torch.tensor([-1.25, 0.0, 0.0, 0.9, -0.8, -0.8, 0.0])
-# over-slot gateway: arm swung out above the tote, hand high - the
-# descent from here is a small elbow drop, not a shoulder swing
-ARM_HOVER = torch.tensor([-0.70, 0.0, 0.0, 1.35, -0.8, -0.5, 0.0])
-# REDUCED descent target: elbow dips 1.35 -> 1.18 only - the tote
-# snaps to the hand from proximity, so the hand never needs to
-# reach the tote, just come near it
-ARM_DOCK = torch.tensor([-0.70, 0.0, 0.0, 1.18, -0.8, -0.5, 0.0])
-# carry pose: arm leveled horizontal (平举) for the delivery walk
-ARM_LEVEL = torch.tensor([0.0, 0.1, 0.0, 0.25, 0.0, -0.5, 0.0])
+# shoulder -1.45 keeps the hand at z ~1.2: at -1.25 the fingertips
+# cleared the tote tops (0.93) by only 7-15 cm and a yawed pass
+# swept tote_d off its post (found on the floor at (1.82, 0.93))
+ARM_HIGH = torch.tensor([-1.45, 0.0, 0.0, 0.9, 0.0, -0.90, 0.0])
+# over-slot gateway, PALM DOWN: wrist roll 0 / pitch -0.90 is the
+# probe-flat jaw (thumb z == middle z at pitch -0.90). Elbow 0.85
+# holds the jaw center at z ~1.02 - 15 cm above the tote center,
+# so the snap fires from HERE; the glued tote bottom (0.89)
+# clears the post top (0.805) by 8 cm - no press-down at all
+ARM_HOVER = torch.tensor([-0.70, 0.0, 0.0, 0.85, 0.0, -0.90, 0.0])
+# REDUCED descent: a small SHOULDER dip (not an elbow drop - the
+# old 1.35->1.05 elbow ladder was an ASCENDING arc that plowed
+# the jaw up through the snapped tote = the pickup jitter).
+# Shoulder -0.55 lowers the jaw to z ~0.95, still 4 cm clear of
+# the post with the glued tote; abort-on-attach stops mid-dip
+ARM_DOCK = torch.tensor([-0.55, 0.0, 0.0, 0.85, 0.0, -0.90, 0.0])
+# carry pose: arm leveled horizontal (平举), palm still down
+ARM_LEVEL = torch.tensor([0.0, 0.1, 0.0, 0.25, 0.0, -0.90, 0.0])
 # the LEFT arm stays chest-folded always: at arm zeros it points
 # straight FORWARD at station height and rams the shelf face
 LEFT_ARM_TUCK = torch.tensor([0.3, -0.1, 0.0, 1.8, 0.0, -1.0, 0.0])
@@ -67,12 +75,11 @@ FINGER_CRADLE = 0.35  # fraction of FINGER_CLOSE for the carry wrap
 # tote teleports to SNAP_OFFSET in the right_hand_middle_1_link
 # frame and is rigidly written there every physics step (no
 # physical pinch at all - offset probe-calibrated on the hand rig).
-# 0.22: generous on purpose - the drive-in drape hangs the jaw
-# 5-10 cm past off-center slots and a 0.13 radius never fired
-# there (totes b-e all skipped); the hover gateway still clears
-# it vertically (>0.24 above the tote top), so it cannot fire
-# early on the swing-out
-SNAP_RADIUS = 0.22
+# 0.25: generous on purpose - the drive-in drape and the extreme
+# slots leave the jaw 0.15-0.20 m off the tote line, and the base
+# physically cannot align closer (station-face nose grind); the
+# hover gateway still clears vertically, so it cannot fire early
+SNAP_RADIUS = 0.25
 # x along the middle-finger link: 0.30 floated the box a hand-
 # length past the jaw (user: too far from the palm) - 0.08 parks
 # it right at the jaw opening, just ahead of the fingertip line;

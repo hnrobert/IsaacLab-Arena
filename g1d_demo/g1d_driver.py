@@ -289,18 +289,24 @@ class G1DDriver:
             waited += 1
         return False
 
-    def move_arm_slow(self, pose, step=0.05, hold=0.15, timeout=10.0):
+    def move_arm_slow(self, pose, step=0.05, hold=0.15, timeout=10.0, abort_attach=False):
         """Ramped arm move: 0.05 rad steps from the CURRENT joints.
 
         Step commands with the 800-stiffness drive snap the arm in
         ~0.2 s (too fast to look at and too fast for contact), so
         every grasp-phase transition goes through this.
+        abort_attach=True stops the ramp the moment a proximity
+        snap fires - continuing to the commanded dip AFTER the tote
+        is glued plows the fingers through the tote (the pickup
+        jitter) - and returns True.
         """
         pose = list(pose)
         deadline = timeout / self.sim.get_physics_dt()
         waited = 0
         while waited < deadline:
-            cur = [n(self.robot.data.joint_pos)[0][self.idx[nm]].item() for nm in RIGHT_ARM]
+            if abort_attach and self._attach is not None:
+                return True
+            cur = self.right_arm_now()
             deltas = [t - c for t, c in zip(pose, cur)]
             if max(abs(d) for d in deltas) < 0.03:
                 self.hold_arm(pose, 0.1)
@@ -309,6 +315,11 @@ class G1DDriver:
             self.hold_arm(nxt, hold)
             waited += int(hold / self.sim.get_physics_dt())
         return False
+
+    def right_arm_now(self) -> list:
+        """Measured right-arm joint positions (7 floats)."""
+        pos = n(self.robot.data.joint_pos)[0]
+        return [pos[self.idx[nm]].item() for nm in RIGHT_ARM]
 
     def fingers_to(self, pose, tolerance=0.4, timeout=8.0) -> bool:
         deadline = timeout / self.sim.get_physics_dt()
@@ -329,28 +340,48 @@ class G1DDriver:
     # ---- base motion ----
 
     def shunt_lateral(self, line_y: float = 0.0, timeout: float = 15.0, tol: float = 0.08) -> bool:
-        """Translate sideways onto the y=line_y rail (endgame align)."""
-        _, y, _ = self.pose()
-        dy = y - line_y
-        if abs(dy) < tol:
+        """Translate sideways onto the y=line_y rail (endgame align).
+
+        The creep diagonal is x-AWARE: near the station (x > 1.2)
+        it runs BACKWARD-diagonal, away from the station face -
+        the old fixed +-0.6 forward-diagonal jammed the nose on
+        the face and every standoff shunt MISSed with y frozen.
+        A stall guard gives up after 2 s without y progress.
+        """
+        x0, y0, _ = self.pose()
+        if abs(y0 - line_y) < tol:
             return True
-        target_yaw = -0.6 if dy > 0 else 0.6
+        want_up = line_y > y0
+        if x0 > 1.2:  # station apron - creep AWAY from its face
+            target_yaw = math.pi - 0.6 if want_up else math.pi + 0.6
+        else:  # open aisle - forward-diagonal is clear
+            target_yaw = 0.6 if want_up else -0.6
         if not self.spin_to(target_yaw, timeout=10.0):
             return False
         dt = self.sim.get_physics_dt()
         deadline = timeout / dt
         waited = 0
+        ref_y, ref_t = y0, 0
         while waited < deadline:
             _, y, _ = self.pose()
             if abs(y - line_y) < 0.04:
                 break
-            self.wheels(0.12, 0.12)
+            if (waited - ref_t) >= int(2.0 / dt):
+                if abs(y - ref_y) < 0.005:
+                    break  # grinding something - give up
+                ref_y, ref_t = y, waited
+            self.wheels(0.15, 0.15)
             self.robot.write_data_to_sim()
             self._step()
             self._refresh()
             waited += 1
         self.wheels(0.0, 0.0)
-        return self.spin_to(0.0, timeout=10.0)
+        ok = abs(self.pose()[1] - line_y) < 0.06
+        print(
+            f"shunt: x={self.pose()[0]:.2f} y={self.pose()[1]:+.3f} (line {line_y:+.2f}) {'OK' if ok else 'MISS'}",
+            flush=True,
+        )
+        return self.spin_to(0.0, timeout=10.0) and ok
 
     def drive_to(
         self,
@@ -360,11 +391,20 @@ class G1DDriver:
         tol: float = 0.06,
         speed: float = DRIVE_SPEED,
         spin_first: bool = True,
+        lat_cap: float = 0.35,
+        lat_tol: float = None,
     ) -> bool:
         """Cruise along the aisle toward (target_x, target_y), 2D-steered.
 
         spin_first=False skips the in-place align spin - rotating with
         a loaded arm strips the grip, so carrying drives never spin.
+        lat_cap steepens the lateral correction (rad) while more
+        than 0.45 m of x remains - approach legs to the extreme
+        slots pass 0.55. lat_tol (m), when set, refuses arrival
+        until the lateral error closes below it - used to converge
+        y AT THE PRE-WALL where an angled nose still clears the
+        station face (at the standoff any yaw digs a corner into
+        it - that grind is what froze every endgame shunt).
         """
         if spin_first and not self.spin_to(0.0, timeout=20.0):
             return False
@@ -386,9 +426,12 @@ class G1DDriver:
             # moves ~1 mm/step, so per-step diffs always look stuck.
             if (waited - ref_t) >= int(4.0 / dt):
                 if abs(x - ref_x) < 0.01:
-                    if shunts < 1:
+                    if shunts < 2:
                         shunts += 1
-                        print(f"drive stalled x={x:.3f} y={y:+.3f} -> shunt", flush=True)
+                        print(
+                            f"drive stalled x={x:.3f} y={y:+.3f} -> shunt",
+                            flush=True,
+                        )
                         self.shunt_lateral(target_y)
                     else:
                         self.wheels(0.0, 0.0)
@@ -398,6 +441,8 @@ class G1DDriver:
                 else:
                     ref_x, ref_t = x, waited
             if abs(dx) < tol and abs(yaw) < 0.25:
+                if lat_tol is not None and abs(dy_line) >= lat_tol:
+                    continue  # x is there, y is not - keep steering
                 if abs(dy_line) >= 0.08:
                     if shunts < 2:
                         shunts += 1
@@ -415,8 +460,14 @@ class G1DDriver:
             # calm PURE-PURSUIT line tracker: reversing legs drift
             # sideways (casters). Lookahead shrinks with the
             # remaining distance so lateral offsets actually close
-            # (a fixed 2.5 m lookahead on a 1.8 m leg leaves ~8 cm)
-            desired = max(-0.35, min(0.35, math.atan2(-dy_line, max(0.35, abs(dx)))))
+            # (a fixed 2.5 m lookahead on a 1.8 m leg leaves ~8 cm).
+            # lat_cap>0.35 steepens the diagonal for big lateral
+            # jumps (the extreme slots need ~0.5 m of y - at 0.35
+            # the geometry NEVER closes it); inside 0.55 m of the
+            # target the cap drops back so the angled nose cannot
+            # scrape the station face on the way in
+            cap = lat_cap if abs(dx) > 0.45 else 0.35
+            desired = max(-cap, min(cap, math.atan2(-dy_line, max(0.35, abs(dx)))))
             if dx < 0:
                 desired = -desired
             err_yaw = (desired - yaw + 3.14159265) % (2 * 3.14159265) - 3.14159265
