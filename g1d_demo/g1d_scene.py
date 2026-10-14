@@ -117,10 +117,12 @@ def build_warehouse_props():
         prop("SM_CardBoxB_01"), (-3.3, 1.2, 0.0)))
     props.append(usd_prop_cfg(
         prop("SM_CratePlastic_A_01"), (-3.3, -1.2, 0.0)))
-    # wall-mounted gear + traffic furniture
+    # wall-mounted gear + traffic furniture (cones OUT of the
+    # +-0.55 delivery lanes - at +-0.85 they left ~2 cm to the
+    # base corners and one run ground to a halt against one)
     props.append(usd_prop_cfg(prop("SM_FuseBox_01"), (4.45, 1.9, 0.0)))
-    props.append(usd_prop_cfg(prop("S_TrafficCone"), (-0.4, -0.85, 0.0)))
-    props.append(usd_prop_cfg(prop("S_TrafficCone"), (-1.6, 0.85, 0.0)))
+    props.append(usd_prop_cfg(prop("S_TrafficCone"), (-0.4, -1.4, 0.0)))
+    props.append(usd_prop_cfg(prop("S_TrafficCone"), (-1.6, 1.4, 0.0)))
     props.append(usd_prop_cfg(
         prop("S_AisleSign"), (1.2, -1.1, 0.0), rot_z=180.0))
     return props

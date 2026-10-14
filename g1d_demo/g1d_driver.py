@@ -8,7 +8,8 @@ from isaaclab.sim import SimulationContext
 
 from g1d_config import (ARM_HOME, DRIVE_SPEED, HALF_TRACK, LEFT_ARM,
                         LEFT_ARM_TUCK, RENDER_EVERY, RIGHT_ARM,
-                        RIGHT_FINGERS, WHEEL_JOINTS, WHEEL_RADIUS)
+                        RIGHT_FINGERS, SNAP_OFFSET, SNAP_RADIUS,
+                        WHEEL_JOINTS, WHEEL_RADIUS)
 
 
 class RenderStepper:
@@ -58,6 +59,23 @@ def yaw_of(quat) -> float:
     return math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
 
 
+def quat_rot(q, v):
+    """Rotate 3-vector v by quaternion q (xyzw)."""
+    x, y, z, w = q
+    # t = 2 * cross(q_vec, v)
+    tx = 2.0 * (y * v[2] - z * v[1])
+    ty = 2.0 * (z * v[0] - x * v[2])
+    tz = 2.0 * (x * v[1] - y * v[0])
+    return (v[0] + w * tx + (y * tz - z * ty),
+            v[1] + w * ty + (z * tx - x * tz),
+            v[2] + w * tz + (x * ty - y * tx))
+
+
+def quat_rot_inv(q, v):
+    """Rotate v by the inverse of q (xyzw)."""
+    return quat_rot((-q[0], -q[1], -q[2], q[3]), v)
+
+
 class G1DDriver:
     """Closed-loop driver over the articulation tensor API."""
 
@@ -88,6 +106,10 @@ class G1DDriver:
         # it made every tote print a stale snapshot (phantom "empty")
         self.totes = list(totes) if totes else []
         self._last_right_pose = ARM_HOME.tolist()
+        # kinematic vacuum state: _attach = held tote record,
+        # _capture = (tote, radius) proximity watch
+        self._attach = None
+        self._capture = None
 
     # ---- outputs ----
 
@@ -144,12 +166,84 @@ class G1DDriver:
                 + pos[names.index(self.HAND_LINKS[2])]) / 2.0
         return (thumb + pair) / 2.0
 
+    # ---- kinematic snap (vacuum) attach ----
+
+    def attach(self, tote) -> None:
+        """Snap the tote ONTO the hand and rigidly hold it there.
+
+        The tote teleports to SNAP_OFFSET in the hand-link frame
+        (user spec: no physical pinch at all), then every physics
+        step re-writes its root pose there with zero velocity - a
+        rigid vacuum cup that cannot slip or explode, in any
+        heading (the offset rotates with the hand).
+        """
+        if self._attach is not None:
+            return  # something is already held
+        names = self.robot.data.body_names
+        link_i = names.index("right_hand_middle_1_link")
+        self._attach = {
+            "tote": tote,
+            "link_i": link_i,
+            # canonical snap point - probe-calibrated on the hand rig
+            "rel_p": np.array(SNAP_OFFSET, dtype=float),
+            # box keeps its world orientation through the carry
+            # (writing xyzw straight through; identity=[0,0,0,1])
+            "rel_q": n(tote.data.root_quat_w)[0].copy(),
+        }
+        self._apply_attach()
+        print("  SNAP: tote fixed to the hand", flush=True)
+
+    def arm_capture(self, tote, radius: float = SNAP_RADIUS) -> None:
+        """Arm the proximity watch: attach fires mid-descent the
+        moment the jaw center comes within `radius` of the tote."""
+        self._capture = (tote, radius)
+
+    def disarm_capture(self) -> None:
+        self._capture = None
+
+    def _check_capture(self) -> None:
+        c = self._capture
+        if c is None or self._attach is not None:
+            return
+        tote, radius = c
+        tp = n(tote.data.root_pos_w)[0]
+        if float(np.linalg.norm(self.hand_center() - tp)) < radius:
+            self.attach(tote)
+
+    def detach(self) -> None:
+        """Release the tote: it simply keeps its last pose and
+        (already zeroed) velocity - i.e. falls under gravity."""
+        if self._attach is not None:
+            self._attach = None
+            print("  DETACH: tote released", flush=True)
+
+    def _apply_attach(self) -> None:
+        """Kinematic follow - one rigid write per physics step."""
+        a = self._attach
+        if a is None:
+            return
+        tote = a["tote"]
+        pos = n(self.robot.data.body_pos_w)[0]
+        hq = n(self.robot.data.body_quat_w)[0][a["link_i"]]
+        tgt = np.array(pos[a["link_i"]]) + np.array(
+            quat_rot(hq, a["rel_p"]))
+        q = a["rel_q"]
+        pose = torch.tensor(
+            [[tgt[0], tgt[1], tgt[2], q[0], q[1], q[2], q[3]]],
+            dtype=torch.float32, device=tote.device)
+        vel = torch.zeros((1, 6), dtype=torch.float32,
+                          device=tote.device)
+        tote.write_root_pose_to_sim(pose)
+        tote.write_root_velocity_to_sim(vel)
+
     # ---- primitives ----
 
     def _refresh(self) -> None:
         self.robot.update(self.sim.get_physics_dt())
         for t in self.totes:
             t.update(self.sim.get_physics_dt())
+        self._check_capture()
+        self._apply_attach()
 
     def run_seconds(self, seconds: float, every_step=None) -> None:
         steps = int(seconds / self.sim.get_physics_dt())
@@ -234,24 +328,6 @@ class G1DDriver:
             waited += int(hold / self.sim.get_physics_dt())
         return False
 
-    def arm_to(self, pose, tolerance=0.3, timeout=12.0) -> bool:
-        deadline = timeout / self.sim.get_physics_dt()
-        waited = 0
-        while waited < deadline:
-            self.arm(pose)
-            self.robot.write_data_to_sim()
-            self._step()
-            self._refresh()
-            waited += 1
-            current = n(self.robot.data.joint_pos)[0]
-            err = max(
-                abs(current[self.idx[nm]].item() - t)
-                for nm, t in zip(RIGHT_ARM, list(pose))
-            )
-            if err < tolerance:
-                return True
-        return False
-
     def fingers_to(self, pose, tolerance=0.4, timeout=8.0) -> bool:
         deadline = timeout / self.sim.get_physics_dt()
         waited = 0
@@ -271,9 +347,6 @@ class G1DDriver:
             if err < tolerance:
                 return True
         return False
-
-    def holding(self) -> bool:
-        return 0.30 < self.finger_max() < 0.78
 
     # ---- base motion ----
 
@@ -425,7 +498,8 @@ class G1DDriver:
         self.wheels(0.0, 0.0)
         return x0 - self.pose()[0]
 
-    def spin_to(self, target_yaw: float, timeout: float = 20.0) -> bool:
+    def spin_to(self, target_yaw: float, timeout: float = 20.0,
+                tol: float = 0.15) -> bool:
         dt = self.sim.get_physics_dt()
         deadline = timeout / dt
         waited = 0
@@ -433,7 +507,7 @@ class G1DDriver:
             _, _, yaw = self.pose()
             err = (yaw - target_yaw + 3.14159265) % (2 * 3.14159265) \
                 - 3.14159265
-            if abs(err) < 0.15:
+            if abs(err) < tol:
                 self.wheels(0.0, 0.0)
                 return True
             rate = max(0.6, min(2.0, 1.5 * abs(err)))
@@ -450,6 +524,75 @@ class G1DDriver:
             waited += 1
         self.wheels(0.0, 0.0)
         return False
+
+    def forward_line(self, dist: float, target_y: float,
+                     speed: float = 0.25, arm_hold=None,
+                     timeout: float = 60.0) -> float:
+        """Straight FORWARD run along the current heading with gentle
+        line-keeping toward target_y, stopping after `dist` metres
+        of along-track progress.
+
+        Distance-based on purpose: a waypoint endgame lets the
+        heading swing while the speed dies, and the leg then ORBITS
+        the waypoint (observed: circled at 0.11 m for a full
+        timeout, then flipped heading into the station). Here the
+        stop is progress along a locked heading - nothing to orbit,
+        and the +/-0.12 rad line correction cannot flip the heading.
+        Returns the along-track distance actually covered.
+        """
+        dt = self.sim.get_physics_dt()
+        deadline = timeout / dt
+        waited = 0
+        x0, y0, yaw0 = self.pose()
+        # anchor to the nearest AISLE AXIS (+-pi / 0), not yaw0:
+        # yaw0 carries the u-turn spin residue (up to 0.15 rad),
+        # which eats the lateral correction before it acts
+        # (observed: 0.62 m slot-y miss on a clean run)
+        axis = math.pi if math.cos(yaw0) < 0.0 else 0.0
+        hx, hy = math.cos(axis), math.sin(axis)
+        # lateral correction sign: +1 facing -x, -1 facing +x
+        # (a +corr heading change moves -y in both cases)
+        lat = -math.copysign(1.0, math.cos(yaw0))
+        ref_p, ref_t = 0.0, 0
+        while waited < deadline:
+            x, y, yaw = self.pose()
+            prog = (x - x0) * hx + (y - y0) * hy
+            if prog >= dist:
+                break
+            # stall bail: grinding (cone/edge) -> accept the spot
+            if (waited - ref_t) >= int(4.0 / dt):
+                if prog - ref_p < 0.01:
+                    print(f"fwd-line stalled at prog={prog:.2f}",
+                          flush=True)
+                    break
+                ref_p, ref_t = prog, waited
+            corr = max(-0.15, min(0.15, math.atan2(y - target_y, 1.2)))
+            desired = axis + lat * corr
+            # NOTE the drive_to form: err = DESIRED - yaw. The
+            # flipped sign is positive feedback - observed the
+            # heading diverge 0.8 rad and wander a meter off-line
+            err = ((desired - yaw + 3.14159265) % (2 * 3.14159265)
+                   - 3.14159265)
+            turn = max(-0.12, min(0.12, 0.8 * err))
+            v = min(speed, max(0.08, 0.7 * (dist - prog)))
+            self.wheels(
+                (v - turn * HALF_TRACK) / WHEEL_RADIUS,
+                (v + turn * HALF_TRACK) / WHEEL_RADIUS,
+            )
+            if arm_hold is not None:
+                self.robot.set_joint_position_target(arm_hold)
+            if waited % int(2.0 / dt) == 0:
+                print(f"fwd-line: x={x:.3f} y={y:+.3f} "
+                      f"prog={prog:.2f}/{dist:.2f} yaw={yaw:+.2f}",
+                      flush=True)
+            self.robot.write_data_to_sim()
+            self._step()
+            self._refresh()
+            waited += 1
+        self.wheels(0.0, 0.0)
+        x, y, _ = self.pose()
+        return (x - x0) * hx + (y - y0) * hy
+
 
 def reset_tote(tote, pos) -> None:
     """Teleport a tote back to its slot (instant in PhysX)."""

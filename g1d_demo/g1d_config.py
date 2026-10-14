@@ -42,19 +42,40 @@ ARM_HOME = torch.tensor([0.0, 0.1, 0.0, 0.3, 0.0, 0.0, 0.0])
 # elbow 1.05 (was 0.9): probe-verified on the 595.99.02
 # landscape - a more vertical touchdown halves the descent
 # knock (16.5 -> 8.3 cm) and the close genuinely stalls
+# deep fallback only: the snap radius normally fires well before
+# this pose is reached - it exists so a bad drape still attaches
 ARM_GRASP = torch.tensor([-0.7, 0.0, 0.0, 1.05, -0.8, -0.5, 0.0])
-# approach gateway: swinging straight from the tuck clips the station
-# lip, so the arm first goes UP, then pitches down onto the slot
+# travel pose: the arm rides UP from the very start (user spec) -
+# over the station lip, nothing to clip in the aisle
 ARM_HIGH = torch.tensor([-1.25, 0.0, 0.0, 0.9, -0.8, -0.8, 0.0])
-# travel pose (chest fold): at arm zeros the G1's arms point straight
-# FORWARD at station height - the uncommanded LEFT arm alone rams the
-# shelf face 0.43 m ahead of the base. Both arms fold for every drive.
-ARM_TUCK = torch.tensor([0.3, 0.1, 0.0, 1.8, 0.0, -1.0, 0.0])
+# over-slot gateway: arm swung out above the tote, hand high - the
+# descent from here is a small elbow drop, not a shoulder swing
+ARM_HOVER = torch.tensor([-0.70, 0.0, 0.0, 1.35, -0.8, -0.5, 0.0])
+# REDUCED descent target: elbow dips 1.35 -> 1.18 only - the tote
+# snaps to the hand from proximity, so the hand never needs to
+# reach the tote, just come near it
+ARM_DOCK = torch.tensor([-0.70, 0.0, 0.0, 1.18, -0.8, -0.5, 0.0])
+# carry pose: arm leveled horizontal (平举) for the delivery walk
+ARM_LEVEL = torch.tensor([0.0, 0.1, 0.0, 0.25, 0.0, -0.5, 0.0])
+# the LEFT arm stays chest-folded always: at arm zeros it points
+# straight FORWARD at station height and rams the shelf face
 LEFT_ARM_TUCK = torch.tensor([0.3, -0.1, 0.0, 1.8, 0.0, -1.0, 0.0])
-ARM_CARRY = torch.tensor([0.0, 0.1, 0.0, 1.2, 0.0, -0.7, 0.0])
-ARM_RELEASE = torch.tensor([-0.6, 0.0, 0.0, 0.8, 0.0, -0.4, 0.0])
 FINGER_OPEN = torch.zeros(7)
 FINGER_CLOSE = torch.tensor([0.9, 0.8, 0.8, 0.9, 0.8, 0.9, 0.8])
+FINGER_CRADLE = 0.35  # fraction of FINGER_CLOSE for the carry wrap
+
+# --- kinematic snap (vacuum) grasp -------------------------------------
+# when the jaw center comes within SNAP_RADIUS of the tote, the
+# tote teleports to SNAP_OFFSET in the right_hand_middle_1_link
+# frame and is rigidly written there every physics step (no
+# physical pinch at all - offset probe-calibrated on the hand rig).
+# 0.22: generous on purpose - the drive-in drape hangs the jaw
+# 5-10 cm past off-center slots and a 0.13 radius never fired
+# there (totes b-e all skipped); the hover gateway still clears
+# it vertically (>0.24 above the tote top), so it cannot fire
+# early on the swing-out
+SNAP_RADIUS = 0.22
+SNAP_OFFSET = (0.30, 0.0, -0.05)
 
 # --- aisle layout ------------------------------------------------------
 STATION_X = 2.45          # replenishment station center (near edge 2.20)
@@ -77,9 +98,9 @@ PICK_TARGETS = (
 )
 TOTE_NAMES = tuple(e[0] for e in PICK_TARGETS)
 
-# delivered totes are tidied onto these pad slots after the release.
-# They MUST sit outside the base's swept width: drive_to would
-# otherwise bulldoze them and shunt the base sideways
+# delivered totes are tidied onto these pad slots by the physical
+# drop - the delivery aims the HELD box at the slot, so they sit
+# outside the base's swept path on the return leg
 PAD_SLOTS = {
     "tote_a": (-0.90, 0.55),
     "tote_b": (-1.10, 0.55),
@@ -87,7 +108,7 @@ PAD_SLOTS = {
     "tote_d": (-1.20, -0.55),
     "tote_e": (-0.80, -0.55),
 }
-PAD_STOP_X = -0.85
+PAD_SPAN = ((-1.45, -0.55), (-0.70, 0.70))  # pad x/y extents
 
 RACK_BEAM = (0.95, 0.45, 0.1)     # orange beams - Mir livery accent
 STATION_BODY = (0.55, 0.5, 0.42)  # wood-tone cabinet
