@@ -15,6 +15,7 @@ from g1d_config import (
     RIGHT_FINGERS,
     SNAP_OFFSET,
     SNAP_RADIUS,
+    SNAP_SHIFT_BACK,
     SNAP_SHIFT_LEFT,
     SNAP_SHIFT_UP,
     WHEEL_JOINTS,
@@ -83,6 +84,18 @@ def quat_rot(q, v):
 def quat_rot_inv(q, v):
     """Rotate v by the inverse of q (xyzw)."""
     return quat_rot((-q[0], -q[1], -q[2], q[3]), v)
+
+
+def quat_mul(a, b):
+    """Hamilton product a*b for xyzw quaternions."""
+    ax, ay, az, aw = a
+    bx, by, bz, bw = b
+    return (
+        aw * bx + ax * bw + ay * bz - az * by,
+        aw * by - ax * bz + ay * bw + az * bx,
+        aw * bz + ax * by - ay * bx + az * bw,
+        aw * bw - ax * bx - ay * by - az * bz,
+    )
 
 
 class G1DDriver:
@@ -175,12 +188,13 @@ class G1DDriver:
         """Snap the tote ONTO the palm and rigidly hold it there.
 
         The world snap point = the SNAP_OFFSET seed (in the
-        middle-finger frame) shifted +SNAP_SHIFT_UP and
-        +SNAP_SHIFT_LEFT toward the base's left (palm-open
-        direction); it is converted ONCE into the PALM link frame,
-        and every physics step then re-writes the tote's root pose
-        there with zero velocity - a rigid vacuum cup that cannot
-        slip or explode, and finger curls no longer displace it.
+        middle-finger frame) shifted up / left / back (base frame);
+        it is converted ONCE into the PALM link frame, and every
+        physics step then re-writes the tote's root pose there with
+        zero velocity. The ORIENTATION is decomposed into the palm
+        frame too and recomposed every step, so the box ROTATES
+        WITH THE HAND (user spec - a world-fixed quat left it
+        translation-locked only).
         """
         if self._attach is not None:
             return  # something is already held
@@ -191,16 +205,20 @@ class G1DDriver:
         quats = n(self.robot.data.body_quat_w)[0]
         target = np.array(pos[seed_i]) + np.array(quat_rot(quats[seed_i], SNAP_OFFSET))
         yaw = self.pose()[2]
+        fwd = np.array([math.cos(yaw), math.sin(yaw), 0.0])
+        left = np.array([-math.sin(yaw), math.cos(yaw), 0.0])
         target = target + np.array([0.0, 0.0, SNAP_SHIFT_UP])
-        target = target + np.array([-math.sin(yaw), math.cos(yaw), 0.0]) * SNAP_SHIFT_LEFT
+        target = target + left * SNAP_SHIFT_LEFT - fwd * SNAP_SHIFT_BACK
         rel_p = np.array(quat_rot_inv(quats[link_i], target - pos[link_i]))
+        # box quat in the PALM frame: palm_q * rel_q reproduces the
+        # box's world quat at attach and follows the palm after
+        pq = quats[link_i]
+        rel_q = quat_mul((-pq[0], -pq[1], -pq[2], pq[3]), n(tote.data.root_quat_w)[0])
         self._attach = {
             "tote": tote,
             "link_i": link_i,
             "rel_p": rel_p,
-            # box keeps its world orientation through the carry
-            # (writing xyzw straight through; identity=[0,0,0,1])
-            "rel_q": n(tote.data.root_quat_w)[0].copy(),
+            "rel_q": np.array(rel_q, dtype=float),
         }
         self._apply_attach()
         print("  SNAP: tote fixed to the palm", flush=True)
@@ -238,7 +256,8 @@ class G1DDriver:
         pos = n(self.robot.data.body_pos_w)[0]
         hq = n(self.robot.data.body_quat_w)[0][a["link_i"]]
         tgt = np.array(pos[a["link_i"]]) + np.array(quat_rot(hq, a["rel_p"]))
-        q = a["rel_q"]
+        # recompose the orientation WITH the palm (xyzw out)
+        q = quat_mul(hq, a["rel_q"])
         pose = torch.tensor([[tgt[0], tgt[1], tgt[2], q[0], q[1], q[2], q[3]]], dtype=torch.float32, device=tote.device)
         vel = torch.zeros((1, 6), dtype=torch.float32, device=tote.device)
         tote.write_root_pose_to_sim(pose)

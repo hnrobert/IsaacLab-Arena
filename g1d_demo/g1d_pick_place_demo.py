@@ -295,8 +295,12 @@ def main() -> None:
             driver.fingers_to(FINGER_OPEN, tolerance=0.5, timeout=3.0)
             driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.6)
             driver.spin_to(0.0, timeout=15.0)
-            # no explicit return leg: the next tote's approach
-            # drive_to covers the aisle run
+            # CORRIDOR RESET: approaching the next tote straight
+            # from the drop position threads the base between the
+            # freshly dropped totes and it eventually wedges (every
+            # later spin silently times out) - return to the aisle
+            # centerline first, then approach with a clean runway
+            driver.drive_to(0.5, target_y=0.0, spin_first=False, tol=0.06, timeout=40.0)
 
         print(f"=== cycle {cycle}: {placements} placed / {picks} picked ===", flush=True)
 
