@@ -88,11 +88,16 @@ SNAP_RADIUS = 0.25
 # the cradled fingers rest on the box instead of through it
 SNAP_OFFSET = (-0.02, 0.0, -0.09)
 # the snap point is ANCHORED to the palm link (not the finger):
-# at attach the world target = the seed point above, shifted
-# +0.12 up (one box edge) and +0.06 toward the robot's LEFT (the
-# palm-open direction) - finger curls and arm rotations then no
-# longer displace the box relative to the palm
-SNAP_SHIFT_UP = 0.12
+# at attach the world target = the seed point above, shifted up
+# and +0.06 toward the robot's LEFT (the palm-open direction) -
+# finger curls and arm rotations then no longer displace the box
+# relative to the palm. UP is 0.20, not the user's original 0.12:
+# at +0.12 the box bottom intersected the OPEN fingertips by 1-3
+# cm and the contact solver fought the kinematic pose write every
+# step - the box visibly tumbled in the hand (user report). +0.20
+# lifts the bottom ~5 cm clear of the fingertips: zero contact,
+# and the release-drop no longer clips them either
+SNAP_SHIFT_UP = 0.20
 SNAP_SHIFT_LEFT = 0.06
 
 # --- aisle layout ------------------------------------------------------
