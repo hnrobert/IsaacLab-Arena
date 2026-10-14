@@ -87,6 +87,13 @@ SNAP_RADIUS = 0.25
 # the base nose; z -0.09 seats it just BELOW the fingertip line so
 # the cradled fingers rest on the box instead of through it
 SNAP_OFFSET = (-0.02, 0.0, -0.09)
+# the snap point is ANCHORED to the palm link (not the finger):
+# at attach the world target = the seed point above, shifted
+# +0.12 up (one box edge) and +0.06 toward the robot's LEFT (the
+# palm-open direction) - finger curls and arm rotations then no
+# longer displace the box relative to the palm
+SNAP_SHIFT_UP = 0.12
+SNAP_SHIFT_LEFT = 0.06
 
 # --- aisle layout ------------------------------------------------------
 STATION_X = 2.45  # replenishment station center (near edge 2.20)

@@ -15,6 +15,8 @@ from g1d_config import (
     RIGHT_FINGERS,
     SNAP_OFFSET,
     SNAP_RADIUS,
+    SNAP_SHIFT_LEFT,
+    SNAP_SHIFT_UP,
     WHEEL_JOINTS,
     WHEEL_RADIUS,
 )
@@ -162,30 +164,46 @@ class G1DDriver:
 
     # ---- kinematic snap (vacuum) attach ----
 
-    def attach(self, tote) -> None:
-        """Snap the tote ONTO the hand and rigidly hold it there.
+    # the box is rigidly fixed to the PALM (parent of all finger
+    # links) - a finger-link anchor made the box swing relative
+    # to the palm whenever the fingers curled or the arm rotated
+    FOLLOW_LINK = "right_hand_palm_link"
+    # seed link for the world snap point (see attach)
+    SEED_LINK = "right_hand_middle_1_link"
 
-        The tote teleports to SNAP_OFFSET in the hand-link frame
-        (user spec: no physical pinch at all), then every physics
-        step re-writes its root pose there with zero velocity - a
-        rigid vacuum cup that cannot slip or explode, in any
-        heading (the offset rotates with the hand).
+    def attach(self, tote) -> None:
+        """Snap the tote ONTO the palm and rigidly hold it there.
+
+        The world snap point = the SNAP_OFFSET seed (in the
+        middle-finger frame) shifted +SNAP_SHIFT_UP and
+        +SNAP_SHIFT_LEFT toward the base's left (palm-open
+        direction); it is converted ONCE into the PALM link frame,
+        and every physics step then re-writes the tote's root pose
+        there with zero velocity - a rigid vacuum cup that cannot
+        slip or explode, and finger curls no longer displace it.
         """
         if self._attach is not None:
             return  # something is already held
         names = self.robot.data.body_names
-        link_i = names.index("right_hand_middle_1_link")
+        link_i = names.index(self.FOLLOW_LINK)
+        seed_i = names.index(self.SEED_LINK)
+        pos = n(self.robot.data.body_pos_w)[0]
+        quats = n(self.robot.data.body_quat_w)[0]
+        target = np.array(pos[seed_i]) + np.array(quat_rot(quats[seed_i], SNAP_OFFSET))
+        yaw = self.pose()[2]
+        target = target + np.array([0.0, 0.0, SNAP_SHIFT_UP])
+        target = target + np.array([-math.sin(yaw), math.cos(yaw), 0.0]) * SNAP_SHIFT_LEFT
+        rel_p = np.array(quat_rot_inv(quats[link_i], target - pos[link_i]))
         self._attach = {
             "tote": tote,
             "link_i": link_i,
-            # canonical snap point - probe-calibrated on the hand rig
-            "rel_p": np.array(SNAP_OFFSET, dtype=float),
+            "rel_p": rel_p,
             # box keeps its world orientation through the carry
             # (writing xyzw straight through; identity=[0,0,0,1])
             "rel_q": n(tote.data.root_quat_w)[0].copy(),
         }
         self._apply_attach()
-        print("  SNAP: tote fixed to the hand", flush=True)
+        print("  SNAP: tote fixed to the palm", flush=True)
 
     def arm_capture(self, tote, radius: float = SNAP_RADIUS) -> None:
         """Arm the proximity watch: attach fires mid-descent the

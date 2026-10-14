@@ -105,6 +105,12 @@ def main() -> None:
 
     hold([0.0, 0.1, 0.0, 0.3, 0.0, 0.0, 0.0], 1.0)  # settle
 
+    print("== right-hand / wrist bodies at settle pose ==", flush=True)
+    pos0 = n(robot.data.body_pos_w)[0]
+    for i, bnm in enumerate(robot.data.body_names):
+        if "right_hand" in bnm or "right_wrist" in bnm:
+            print(f"  {bnm}: ({pos0[i][0]:.3f},{pos0[i][1]:+.3f},{pos0[i][2]:.3f})", flush=True)
+
     print("== wrist_pitch sweep: flat jaw = thumb z == middle z ==", flush=True)
     print("(shoulder -0.70, elbow 1.30, roll 0)", flush=True)
     for p in (-0.35, -0.65, -0.80, -0.90, -1.00):

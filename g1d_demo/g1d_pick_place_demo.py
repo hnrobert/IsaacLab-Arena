@@ -51,8 +51,6 @@ from g1d_config import (
     ARM_HIGH,
     ARM_HOVER,
     ARM_LEVEL,
-    FINGER_CLOSE,
-    FINGER_CRADLE,
     FINGER_OPEN,
     PAD_SLOTS,
     PAD_SPAN,
@@ -214,21 +212,18 @@ def main() -> None:
             picks += 1
             print(f"  t+{(stepper.steps - t0_steps) / 60.0:.0f}s snapped", flush=True)
 
-            # --- lift clear FIRST, then wrap -----------------------
-            # freeze the arm where the snap fired (mid-dip), rise
-            # off the post, and only then close the cradle - the
-            # glued tote rides just above the post top right now
+            # --- lift clear, fingers stay OPEN ----------------------
+            # freeze the arm where the snap fired (mid-dip) and
+            # rise off the post. NO finger curl while holding: the
+            # box rides AT the fingertip line now, and curling the
+            # fingers into the kinematic box is a contact fight
+            # that deflected the arm and scattered the drops - the
+            # box sits on the open palm like a tray instead
             pose = driver.right_arm_now()
             lift = list(pose)
             lift[0] -= 0.15  # rise ~12 cm before any base motion
             driver.move_arm_smooth(lift, speed=0.6)
-            cradle = (FINGER_CLOSE * FINGER_CRADLE).tolist()
-            wrap = hold_cmd(driver, lift, cradle)
-            driver.run_seconds(
-                0.3,
-                every_step=lambda: (driver.robot.set_joint_position_target(wrap)),
-            )
-            carry_hold = wrap
+            carry_hold = hold_cmd(driver, lift, FINGER_OPEN.tolist())
 
             # --- clear the station, U-turn 180 deg ----------------
             # spinning at the standoff grinds the nose on the
@@ -247,7 +242,7 @@ def main() -> None:
             # leveling AFTER the spin: a level arm sweeps the held
             # tote through the station board / neighboring totes
             driver.move_arm_smooth(ARM_LEVEL.tolist(), speed=0.6, timeout=15.0)
-            carry_hold = hold_cmd(driver, ARM_LEVEL.tolist(), cradle)
+            carry_hold = hold_cmd(driver, ARM_LEVEL.tolist(), FINGER_OPEN.tolist())
             # settle the arm before measuring the box lead - the
             # level swing changes it mid-motion (0.5 -> 0.67 m and
             # the stop line overshot by just that delta)
@@ -276,6 +271,12 @@ def main() -> None:
                 driver.forward_line(bx_p - (slot_px + reach), target_y=slot_py, speed=0.25, arm_hold=carry_hold)
 
             # --- physical placement: release and let it fall ------
+            # (tried backing the base off / retracting the arm to
+            # keep the falling box clear of the fingertips - both
+            # caused worse failures: the arm sweep bats the box a
+            # half-metre long, the reverse parks the rear corner on
+            # the fresh drop and jams every later spin. The plain
+            # drop lands 4/5 on-pad; take that)
             driver.detach()
             driver.run_seconds(1.0)
             tp = n(tote.data.root_pos_w)[0]
