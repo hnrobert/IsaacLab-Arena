@@ -81,10 +81,12 @@ FINGER_CRADLE = 0.35  # fraction of FINGER_CLOSE for the carry wrap
 # hover gateway still clears vertically, so it cannot fire early
 SNAP_RADIUS = 0.25
 # x along the middle-finger link: 0.30 floated the box a hand-
-# length past the jaw (user: too far from the palm) - 0.08 parks
-# it right at the jaw opening, just ahead of the fingertip line;
-# z -0.07 seats it slightly below the fingers, in the cradle
-SNAP_OFFSET = (0.08, 0.0, -0.07)
+# length past the jaw, 0.08 still left it ahead of the fingertips
+# (user: one box edge closer to the body) - -0.02 pulls it a full
+# 0.12 m back so it rides against the palm, roughly one edge from
+# the base nose; z -0.09 seats it just BELOW the fingertip line so
+# the cradled fingers rest on the box instead of through it
+SNAP_OFFSET = (-0.02, 0.0, -0.09)
 
 # --- aisle layout ------------------------------------------------------
 STATION_X = 2.45  # replenishment station center (near edge 2.20)
