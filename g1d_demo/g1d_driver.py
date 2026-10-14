@@ -1,15 +1,25 @@
 """Closed-loop driver: stepping, motion primitives, navigation."""
-import math
 
+import math
 import numpy as np
 import torch
+
+from g1d_config import (
+    ARM_HOME,
+    DRIVE_SPEED,
+    HALF_TRACK,
+    LEFT_ARM,
+    LEFT_ARM_TUCK,
+    RENDER_EVERY,
+    RIGHT_ARM,
+    RIGHT_FINGERS,
+    SNAP_OFFSET,
+    SNAP_RADIUS,
+    WHEEL_JOINTS,
+    WHEEL_RADIUS,
+)
 from isaaclab.assets import Articulation
 from isaaclab.sim import SimulationContext
-
-from g1d_config import (ARM_HOME, DRIVE_SPEED, HALF_TRACK, LEFT_ARM,
-                        LEFT_ARM_TUCK, RENDER_EVERY, RIGHT_ARM,
-                        RIGHT_FINGERS, SNAP_OFFSET, SNAP_RADIUS,
-                        WHEEL_JOINTS, WHEEL_RADIUS)
 
 
 class RenderStepper:
@@ -46,6 +56,7 @@ def n(t):
         return t.detach().cpu().numpy()
     return t.numpy()  # warp array (Fabric/GPU pipeline)
 
+
 def yaw_of(quat) -> float:
     """Yaw (rad) from a single xyzw quaternion.
 
@@ -53,9 +64,7 @@ def yaw_of(quat) -> float:
     constant ~0 for every pure-yaw rotation and silently kills ALL
     heading feedback.
     """
-    x, y, z, w = (
-        quat.tolist() if hasattr(quat, "tolist") else list(quat)
-    )
+    x, y, z, w = quat.tolist() if hasattr(quat, "tolist") else list(quat)
     return math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
 
 
@@ -66,9 +75,7 @@ def quat_rot(q, v):
     tx = 2.0 * (y * v[2] - z * v[1])
     ty = 2.0 * (z * v[0] - x * v[2])
     tz = 2.0 * (x * v[1] - y * v[0])
-    return (v[0] + w * tx + (y * tz - z * ty),
-            v[1] + w * ty + (z * tx - x * tz),
-            v[2] + w * tz + (x * ty - y * tx))
+    return (v[0] + w * tx + (y * tz - z * ty), v[1] + w * ty + (z * tx - x * tz), v[2] + w * tz + (x * ty - y * tx))
 
 
 def quat_rot_inv(q, v):
@@ -79,26 +86,19 @@ def quat_rot_inv(q, v):
 class G1DDriver:
     """Closed-loop driver over the articulation tensor API."""
 
-    HAND_LINKS = ("right_hand_thumb_2_link",
-                  "right_hand_index_1_link",
-                  "right_hand_middle_1_link")
+    HAND_LINKS = ("right_hand_thumb_2_link", "right_hand_index_1_link", "right_hand_middle_1_link")
 
-    def __init__(self, robot: Articulation, sim: SimulationContext,
-                 totes=None, step=None):
+    def __init__(self, robot: Articulation, sim: SimulationContext, totes=None, step=None):
         self.robot = robot
         self.sim = sim
         # render-decimated stepping (or a plain step when omitted)
-        self._step = (lambda: step(self.sim)) if step is not None \
-            else self.sim.step
+        self._step = (lambda: step(self.sim)) if step is not None else self.sim.step
         self.device = robot.device
         names = self.robot.joint_names
         self.idx = {nm: i for i, nm in enumerate(names)}
-        self.arm_ids = torch.tensor(
-            [self.idx[nm] for nm in RIGHT_ARM], device=robot.device)
-        self.left_arm_ids = torch.tensor(
-            [self.idx[nm] for nm in LEFT_ARM], device=robot.device)
-        self.finger_ids = torch.tensor(
-            [self.idx[nm] for nm in RIGHT_FINGERS], device=robot.device)
+        self.arm_ids = torch.tensor([self.idx[nm] for nm in RIGHT_ARM], device=robot.device)
+        self.left_arm_ids = torch.tensor([self.idx[nm] for nm in LEFT_ARM], device=robot.device)
+        self.finger_ids = torch.tensor([self.idx[nm] for nm in RIGHT_FINGERS], device=robot.device)
         self.left_wheel = self.idx[WHEEL_JOINTS[0]]
         self.right_wheel = self.idx[WHEEL_JOINTS[1]]
         self.n_joints = len(names)
@@ -124,17 +124,14 @@ class G1DDriver:
 
     def arm(self, pose) -> None:
         cmd = self._baseline()
-        cmd[0, self.arm_ids] = torch.as_tensor(
-            pose, dtype=torch.float32, device=self.device)
+        cmd[0, self.arm_ids] = torch.as_tensor(pose, dtype=torch.float32, device=self.device)
         self.robot.set_joint_position_target(cmd)
         self._last_right_pose = list(pose)
 
     def fingers(self, pose) -> None:
         cmd = self._baseline()
         cmd[0, self.finger_ids] = pose.to(self.device)
-        cmd[0, self.arm_ids] = torch.as_tensor(
-            self._last_right_pose, dtype=torch.float32,
-            device=self.device)
+        cmd[0, self.arm_ids] = torch.as_tensor(self._last_right_pose, dtype=torch.float32, device=self.device)
         self.robot.set_joint_position_target(cmd)
 
     def wheels(self, left: float, right: float) -> None:
@@ -153,17 +150,14 @@ class G1DDriver:
 
     def finger_max(self) -> float:
         pos = n(self.robot.data.joint_pos)[0]
-        return max(
-            abs(pos[self.idx[nm]].item()) for nm in RIGHT_FINGERS
-        )
+        return max(abs(pos[self.idx[nm]].item()) for nm in RIGHT_FINGERS)
 
     def hand_center(self) -> np.ndarray:
         """Grasp center: thumb tip vs index/middle pair midpoint."""
         pos = n(self.robot.data.body_pos_w)[0]
         names = self.robot.data.body_names
         thumb = pos[names.index(self.HAND_LINKS[0])]
-        pair = (pos[names.index(self.HAND_LINKS[1])]
-                + pos[names.index(self.HAND_LINKS[2])]) / 2.0
+        pair = (pos[names.index(self.HAND_LINKS[1])] + pos[names.index(self.HAND_LINKS[2])]) / 2.0
         return (thumb + pair) / 2.0
 
     # ---- kinematic snap (vacuum) attach ----
@@ -225,14 +219,10 @@ class G1DDriver:
         tote = a["tote"]
         pos = n(self.robot.data.body_pos_w)[0]
         hq = n(self.robot.data.body_quat_w)[0][a["link_i"]]
-        tgt = np.array(pos[a["link_i"]]) + np.array(
-            quat_rot(hq, a["rel_p"]))
+        tgt = np.array(pos[a["link_i"]]) + np.array(quat_rot(hq, a["rel_p"]))
         q = a["rel_q"]
-        pose = torch.tensor(
-            [[tgt[0], tgt[1], tgt[2], q[0], q[1], q[2], q[3]]],
-            dtype=torch.float32, device=tote.device)
-        vel = torch.zeros((1, 6), dtype=torch.float32,
-                          device=tote.device)
+        pose = torch.tensor([[tgt[0], tgt[1], tgt[2], q[0], q[1], q[2], q[3]]], dtype=torch.float32, device=tote.device)
+        vel = torch.zeros((1, 6), dtype=torch.float32, device=tote.device)
         tote.write_root_pose_to_sim(pose)
         tote.write_root_velocity_to_sim(vel)
 
@@ -254,8 +244,7 @@ class G1DDriver:
             self._step()
             self._refresh()
 
-    def hold_arm(self, pose, seconds: float,
-                 fingers: list = None) -> None:
+    def hold_arm(self, pose, seconds: float, fingers: list = None) -> None:
         """Hold one right-arm pose (left arm stays chest-folded).
 
         fingers=None commands the jaw OPEN: during descents the
@@ -265,11 +254,9 @@ class G1DDriver:
         (d13/d14). Pass an explicit list for other targets.
         """
         cmd = self._baseline()
-        cmd[0, self.arm_ids] = torch.as_tensor(
-            pose, dtype=torch.float32, device=self.device)
+        cmd[0, self.arm_ids] = torch.as_tensor(pose, dtype=torch.float32, device=self.device)
         if fingers is not None:
-            cmd[0, self.finger_ids] = torch.as_tensor(
-                fingers, dtype=torch.float32, device=self.device)
+            cmd[0, self.finger_ids] = torch.as_tensor(fingers, dtype=torch.float32, device=self.device)
         self._last_right_pose = list(pose)
         self.run_seconds(
             seconds,
@@ -291,21 +278,18 @@ class G1DDriver:
         deadline = timeout / dt
         waited = 0
         while waited < deadline:
-            cur = [n(self.robot.data.joint_pos)[0][
-                self.idx[nm]].item() for nm in RIGHT_ARM]
+            cur = [n(self.robot.data.joint_pos)[0][self.idx[nm]].item() for nm in RIGHT_ARM]
             deltas = [t - c for t, c in zip(pose, cur)]
             if max(abs(d) for d in deltas) < 0.03:
                 self.hold_arm(pose, 0.1)
                 return True
             cap = speed * dt
-            nxt = [c + max(-cap, min(cap, d))
-                   for c, d in zip(cur, deltas)]
+            nxt = [c + max(-cap, min(cap, d)) for c, d in zip(cur, deltas)]
             self.hold_arm(nxt, dt)
             waited += 1
         return False
 
-    def move_arm_slow(self, pose, step=0.05, hold=0.15,
-                      timeout=10.0):
+    def move_arm_slow(self, pose, step=0.05, hold=0.15, timeout=10.0):
         """Ramped arm move: 0.05 rad steps from the CURRENT joints.
 
         Step commands with the 800-stiffness drive snap the arm in
@@ -316,14 +300,12 @@ class G1DDriver:
         deadline = timeout / self.sim.get_physics_dt()
         waited = 0
         while waited < deadline:
-            cur = [n(self.robot.data.joint_pos)[0][
-                self.idx[nm]].item() for nm in RIGHT_ARM]
+            cur = [n(self.robot.data.joint_pos)[0][self.idx[nm]].item() for nm in RIGHT_ARM]
             deltas = [t - c for t, c in zip(pose, cur)]
             if max(abs(d) for d in deltas) < 0.03:
                 self.hold_arm(pose, 0.1)
                 return True
-            nxt = [c + max(-step, min(step, d))
-                   for c, d in zip(cur, deltas)]
+            nxt = [c + max(-step, min(step, d)) for c, d in zip(cur, deltas)]
             self.hold_arm(nxt, hold)
             waited += int(hold / self.sim.get_physics_dt())
         return False
@@ -338,20 +320,15 @@ class G1DDriver:
             self._refresh()
             waited += 1
             current = n(self.robot.data.joint_pos)[0]
-            plist = (pose.detach().cpu().tolist()
-                     if torch.is_tensor(pose) else list(pose))
-            err = max(
-                abs(current[self.idx[nm]].item() - t)
-                for nm, t in zip(RIGHT_FINGERS, plist)
-            )
+            plist = pose.detach().cpu().tolist() if torch.is_tensor(pose) else list(pose)
+            err = max(abs(current[self.idx[nm]].item() - t) for nm, t in zip(RIGHT_FINGERS, plist))
             if err < tolerance:
                 return True
         return False
 
     # ---- base motion ----
 
-    def shunt_lateral(self, line_y: float = 0.0,
-                      timeout: float = 15.0, tol: float = 0.08) -> bool:
+    def shunt_lateral(self, line_y: float = 0.0, timeout: float = 15.0, tol: float = 0.08) -> bool:
         """Translate sideways onto the y=line_y rail (endgame align)."""
         _, y, _ = self.pose()
         dy = y - line_y
@@ -376,9 +353,13 @@ class G1DDriver:
         return self.spin_to(0.0, timeout=10.0)
 
     def drive_to(
-        self, target_x: float, target_y: float = 0.0,
-        timeout: float = 60.0, tol: float = 0.06,
-        speed: float = DRIVE_SPEED, spin_first: bool = True,
+        self,
+        target_x: float,
+        target_y: float = 0.0,
+        timeout: float = 60.0,
+        tol: float = 0.06,
+        speed: float = DRIVE_SPEED,
+        spin_first: bool = True,
     ) -> bool:
         """Cruise along the aisle toward (target_x, target_y), 2D-steered.
 
@@ -407,14 +388,11 @@ class G1DDriver:
                 if abs(x - ref_x) < 0.01:
                     if shunts < 1:
                         shunts += 1
-                        print(f"drive stalled x={x:.3f} y={y:+.3f} "
-                              f"-> shunt", flush=True)
+                        print(f"drive stalled x={x:.3f} y={y:+.3f} -> shunt", flush=True)
                         self.shunt_lateral(target_y)
                     else:
                         self.wheels(0.0, 0.0)
-                        print(f"arrived x={x:.3f} y={y:.3f} "
-                              f"(stalled-loose) "
-                              f"(target {target_x:.3f})", flush=True)
+                        print(f"arrived x={x:.3f} y={y:.3f} (stalled-loose) (target {target_x:.3f})", flush=True)
                         return True
                     ref_x, ref_t = x, waited
                 else:
@@ -426,12 +404,10 @@ class G1DDriver:
                         self.shunt_lateral(target_y)
                         continue
                     self.wheels(0.0, 0.0)
-                    print(f"arrived x={x:.3f} y={y:.3f} (loose) "
-                          f"(target {target_x:.3f})", flush=True)
+                    print(f"arrived x={x:.3f} y={y:.3f} (loose) (target {target_x:.3f})", flush=True)
                     return True
                 self.wheels(0.0, 0.0)
-                print(f"arrived x={x:.3f} y={y:.3f} "
-                      f"(target {target_x:.3f})", flush=True)
+                print(f"arrived x={x:.3f} y={y:.3f} (target {target_x:.3f})", flush=True)
                 return True
             v = max(-speed, min(speed, 0.7 * dx))
             if abs(v) < 0.06:
@@ -440,20 +416,17 @@ class G1DDriver:
             # sideways (casters). Lookahead shrinks with the
             # remaining distance so lateral offsets actually close
             # (a fixed 2.5 m lookahead on a 1.8 m leg leaves ~8 cm)
-            desired = max(-0.35, min(
-                0.35, math.atan2(-dy_line, max(0.35, abs(dx)))))
+            desired = max(-0.35, min(0.35, math.atan2(-dy_line, max(0.35, abs(dx)))))
             if dx < 0:
                 desired = -desired
-            err_yaw = (desired - yaw + 3.14159265) % (2 * 3.14159265) \
-                - 3.14159265
+            err_yaw = (desired - yaw + 3.14159265) % (2 * 3.14159265) - 3.14159265
             turn = max(-0.35, min(0.35, 1.2 * err_yaw))
             self.wheels(
                 (v - turn * HALF_TRACK) / WHEEL_RADIUS,
                 (v + turn * HALF_TRACK) / WHEEL_RADIUS,
             )
             if waited % int(2.0 / dt) == 0:
-                print(f"drive: x={x:.3f} y={y:+.3f} dx={dx:+.3f} "
-                      f"yaw={yaw:+.3f}", flush=True)
+                print(f"drive: x={x:.3f} y={y:+.3f} dx={dx:+.3f} yaw={yaw:+.3f}", flush=True)
             self.robot.write_data_to_sim()
             self._step()
             self._refresh()
@@ -461,8 +434,7 @@ class G1DDriver:
         self.wheels(0.0, 0.0)
         return False
 
-    def back_straight(self, dist: float, speed: float = 0.05,
-                      arm_hold=None, timeout: float = 25.0) -> float:
+    def back_straight(self, dist: float, speed: float = 0.05, arm_hold=None, timeout: float = 25.0) -> float:
         """Straight-line reverse with a gentle yaw lock.
 
         Equal wheel velocities alone drift LATERALLY ~0.11 m over a
@@ -481,8 +453,7 @@ class G1DDriver:
             if (x0 - self.pose()[0]) >= dist:
                 break
             _, _, yaw = self.pose()
-            err = ((yaw - yaw0 + 3.14159265) % (2 * 3.14159265)
-                   - 3.14159265)
+            err = (yaw - yaw0 + 3.14159265) % (2 * 3.14159265) - 3.14159265
             turn = max(-0.08, min(0.08, 0.8 * err))
             v = -speed
             self.wheels(
@@ -498,15 +469,13 @@ class G1DDriver:
         self.wheels(0.0, 0.0)
         return x0 - self.pose()[0]
 
-    def spin_to(self, target_yaw: float, timeout: float = 20.0,
-                tol: float = 0.15) -> bool:
+    def spin_to(self, target_yaw: float, timeout: float = 20.0, tol: float = 0.15) -> bool:
         dt = self.sim.get_physics_dt()
         deadline = timeout / dt
         waited = 0
         while waited < deadline:
             _, _, yaw = self.pose()
-            err = (yaw - target_yaw + 3.14159265) % (2 * 3.14159265) \
-                - 3.14159265
+            err = (yaw - target_yaw + 3.14159265) % (2 * 3.14159265) - 3.14159265
             if abs(err) < tol:
                 self.wheels(0.0, 0.0)
                 return True
@@ -525,9 +494,9 @@ class G1DDriver:
         self.wheels(0.0, 0.0)
         return False
 
-    def forward_line(self, dist: float, target_y: float,
-                     speed: float = 0.25, arm_hold=None,
-                     timeout: float = 60.0) -> float:
+    def forward_line(
+        self, dist: float, target_y: float, speed: float = 0.25, arm_hold=None, timeout: float = 60.0
+    ) -> float:
         """Straight FORWARD run along the current heading with gentle
         line-keeping toward target_y, stopping after `dist` metres
         of along-track progress.
@@ -562,8 +531,7 @@ class G1DDriver:
             # stall bail: grinding (cone/edge) -> accept the spot
             if (waited - ref_t) >= int(4.0 / dt):
                 if prog - ref_p < 0.01:
-                    print(f"fwd-line stalled at prog={prog:.2f}",
-                          flush=True)
+                    print(f"fwd-line stalled at prog={prog:.2f}", flush=True)
                     break
                 ref_p, ref_t = prog, waited
             corr = max(-0.15, min(0.15, math.atan2(y - target_y, 1.2)))
@@ -571,8 +539,7 @@ class G1DDriver:
             # NOTE the drive_to form: err = DESIRED - yaw. The
             # flipped sign is positive feedback - observed the
             # heading diverge 0.8 rad and wander a meter off-line
-            err = ((desired - yaw + 3.14159265) % (2 * 3.14159265)
-                   - 3.14159265)
+            err = (desired - yaw + 3.14159265) % (2 * 3.14159265) - 3.14159265
             turn = max(-0.12, min(0.12, 0.8 * err))
             v = min(speed, max(0.08, 0.7 * (dist - prog)))
             self.wheels(
@@ -582,9 +549,7 @@ class G1DDriver:
             if arm_hold is not None:
                 self.robot.set_joint_position_target(arm_hold)
             if waited % int(2.0 / dt) == 0:
-                print(f"fwd-line: x={x:.3f} y={y:+.3f} "
-                      f"prog={prog:.2f}/{dist:.2f} yaw={yaw:+.2f}",
-                      flush=True)
+                print(f"fwd-line: x={x:.3f} y={y:+.3f} prog={prog:.2f}/{dist:.2f} yaw={yaw:+.2f}", flush=True)
             self.robot.write_data_to_sim()
             self._step()
             self._refresh()
@@ -597,12 +562,9 @@ class G1DDriver:
 def reset_tote(tote, pos) -> None:
     """Teleport a tote back to its slot (instant in PhysX)."""
     try:
-        dev = torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu")
+        dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         tote.write_root_pose_to_sim(
-            torch.tensor([[pos[0], pos[1], pos[2],
-                           1.0, 0.0, 0.0, 0.0]],
-                         dtype=torch.float32, device=dev)
+            torch.tensor([[pos[0], pos[1], pos[2], 1.0, 0.0, 0.0, 0.0]], dtype=torch.float32, device=dev)
         )
     except Exception as exc:  # noqa: BLE001
         print(f"tote reset failed: {exc}", flush=True)

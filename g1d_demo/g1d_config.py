@@ -2,8 +2,8 @@
 
 Pure data - torch tensors only, no Isaac imports.
 """
-import os
 
+import os
 import torch
 
 REPO = "/workspaces/isaaclab_arena"
@@ -31,9 +31,7 @@ RIGHT_ARM = [
 ]
 LEFT_ARM = [nm.replace("right_", "left_") for nm in RIGHT_ARM]
 RIGHT_FINGERS = [
-    f"right_hand_{nm}_joint"
-    for nm in ("thumb_0", "thumb_1", "thumb_2",
-               "middle_0", "middle_1", "index_0", "index_1")
+    f"right_hand_{nm}_joint" for nm in ("thumb_0", "thumb_1", "thumb_2", "middle_0", "middle_1", "index_0", "index_1")
 ]
 ARM_HOME = torch.tensor([0.0, 0.1, 0.0, 0.3, 0.0, 0.0, 0.0])
 # GPU-calibrated top pinch: thumb hull at (2.22, 0, 0.91) and middle
@@ -75,22 +73,28 @@ FINGER_CRADLE = 0.35  # fraction of FINGER_CLOSE for the carry wrap
 # it vertically (>0.24 above the tote top), so it cannot fire
 # early on the swing-out
 SNAP_RADIUS = 0.22
-SNAP_OFFSET = (0.30, 0.0, -0.05)
+# x along the middle-finger link: 0.30 floated the box a hand-
+# length past the jaw (user: too far from the palm) - 0.08 parks
+# it right at the jaw opening, just ahead of the fingertip line;
+# z -0.07 seats it slightly below the fingers, in the cradle
+SNAP_OFFSET = (0.08, 0.0, -0.07)
 
 # --- aisle layout ------------------------------------------------------
-STATION_X = 2.45          # replenishment station center (near edge 2.20)
+STATION_X = 2.45  # replenishment station center (near edge 2.20)
 STATION_TOP = 0.80
 PAD_POS = (-1.0, 0.0, 0.005)
-TOTE_SIZE = 0.12          # fills the 11.7 cm thumb-to-middle gap at wrist -0.5
+TOTE_SIZE = 0.12  # fills the 11.7 cm thumb-to-middle gap at wrist -0.5
 TOTE_Z = 0.805 + TOTE_SIZE / 2 + 0.005  # post top + half tote
 # (posts lift the totes 4 cm into free air: fingers close on
 # the tote body only - no board-contact grasp chaos)
-STANDOFF_CLEAR = 1.84     # physics wall: AGV nose hits the 2.20 edge
+STANDOFF_CLEAR = 1.84  # physics wall: AGV nose hits the 2.20 edge
 
 # FIVE pick slots across the 0.9 m board (y +-0.45): every cycle
 # services all five totes in sequence - multiple picks per visit.
+# (no red/orange anywhere: the beam + posts render their DEFAULT
+# material, and tote_a stays clear of the old livery orange)
 PICK_TARGETS = (
-    ("tote_a", 2.27, 0.00, (0.9, 0.45, 0.1)),
+    ("tote_a", 2.27, 0.00, (0.95, 0.80, 0.20)),
     ("tote_b", 2.27, 0.24, (0.1, 0.6, 0.9)),
     ("tote_c", 2.27, -0.24, (0.2, 0.8, 0.3)),
     ("tote_d", 2.27, 0.48, (0.8, 0.2, 0.6)),
@@ -110,6 +114,5 @@ PAD_SLOTS = {
 }
 PAD_SPAN = ((-1.45, -0.55), (-0.70, 0.70))  # pad x/y extents
 
-RACK_BEAM = (0.95, 0.45, 0.1)     # orange beams - Mir livery accent
 STATION_BODY = (0.55, 0.5, 0.42)  # wood-tone cabinet
 PAD_COLOR = (0.1, 0.35, 0.8)
