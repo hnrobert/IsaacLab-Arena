@@ -42,7 +42,6 @@ simulation_app = app_launcher.app
 """Now the sim is alive - the split modules import isaaclab safely."""
 
 import math
-import numpy as np
 import torch
 
 import carb

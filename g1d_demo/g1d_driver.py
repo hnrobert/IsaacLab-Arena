@@ -244,7 +244,7 @@ class G1DDriver:
             self._step()
             self._refresh()
 
-    def hold_arm(self, pose, seconds: float, fingers: list = None) -> None:
+    def hold_arm(self, pose, seconds: float, fingers: list | None = None) -> None:
         """Hold one right-arm pose (left arm stays chest-folded).
 
         fingers=None commands the jaw OPEN: during descents the
