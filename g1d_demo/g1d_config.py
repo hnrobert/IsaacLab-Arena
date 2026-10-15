@@ -115,6 +115,18 @@ TOTE_Z = 0.805 + TOTE_SIZE / 2 + 0.005  # post top + half tote
 # the tote body only - no board-contact grasp chaos)
 STANDOFF_CLEAR = 1.84  # physics wall: AGV nose hits the 2.20 edge
 
+# --- hall footprint ----------------------------------------------------
+# 2x the original 9x6.4 room = 18x12 m. The whole enclosure (wall
+# runs, floor tiles, rack rows) derives from these; the wall runs
+# assert on spans that are not a multiple of the 3 m panel, so a
+# HALL_SCALE of 3.0 (27x18) tiles cleanly too - anything else needs
+# the assert revisited. Robot workflow coords do NOT scale (station,
+# pad, slots all stay put - they are probe-calibrated).
+HALL_SCALE = 2.0
+HALL_X = 4.5 * HALL_SCALE  # end-wall lines at +-HALL_X; side runs span them
+HALL_Y = 3.0 * HALL_SCALE  # side-wall lines at +-HALL_Y; end runs span them
+RACK_Y = 2.4 * HALL_SCALE  # rack rows flanking the aisle
+
 # FIVE pick slots across the 0.9 m board (y +-0.45): every cycle
 # services all five totes in sequence - multiple picks per visit.
 # (no red/orange anywhere: the beam + posts render their DEFAULT

@@ -6,10 +6,13 @@ import isaaclab.sim as sim_utils
 import omni.usd
 from g1d_config import (
     G1D_USD,
+    HALL_X,
+    HALL_Y,
     HOME_ROOT_Z,
     PAD_COLOR,
     PAD_POS,
     PICK_TARGETS,
+    RACK_Y,
     STATION_BODY,
     STATION_TOP,
     STATION_X,
@@ -83,43 +86,56 @@ def rotate_props(env_ns="/World/envs/env_0"):
     print(f"rotated {len(_PROP_ROT)} props", flush=True)
 
 
+def _centers(half, step):
+    """Panel-tile centers covering -half..+half with `step`-spaced runs."""
+    n = 2 * half / step
+    assert abs(n - round(n)) < 1e-6, f"{half} m span not a multiple of the {step} m panel"
+    return [-half + step * (i + 0.5) for i in range(int(round(n)))]
+
+
 def build_warehouse_props():
     """All static Simple_Warehouse dressing, as spawn cfgs."""
     props = []
-    # concrete-look floor tiles down the aisle (visual; the ground
-    # plane below provides collision)
-    for x in (-3.0, 1.5):
-        props.append(usd_prop_cfg(prop("SM_floor02"), (x, 0.0, 0.002)))
-    # aisle lane stripes
-    for x in (-2.0, 2.0):
+    # concrete-look 6 m floor tiles slab over the whole hall (visual;
+    # the ground plane below provides collision)
+    for x in _centers(HALL_X, 6.0):
+        for y in _centers(HALL_Y, 6.0):
+            props.append(usd_prop_cfg(prop("SM_floor02"), (x, y, 0.002)))
+    # aisle lane stripes (4 m decals, stopping 1 m short of the walls)
+    for x in _centers(HALL_X - 1.0, 4.0):
         for y in (-0.62, 0.62):
             props.append(usd_prop_cfg(prop("SM_FloorDecal_StripeFull_4m"), (x, y, 0.004)))
-    # perimeter walls: rotate the 3 m panels so the long axis runs x
-    for y in (-3.2, 3.2):
-        for x in (-3.0, 0.0, 3.0):
+    # perimeter: full 3 m panel runs on all four sides. The side runs
+    # reach the end-wall lines so the corners cross-overlap solid - the
+    # old single-panel end walls left all four corners open.
+    for y in (HALL_Y, -HALL_Y):
+        for x in _centers(HALL_X, 3.0):
             props.append(usd_prop_cfg(prop("SM_WallA_3M"), (x, y, 0.0), rot_z=90.0))
-    # end walls (default orientation: long axis along y)
-    for x in (-4.6, 4.6):
-        props.append(usd_prop_cfg(prop("SM_WallA_3M"), (x, 0.0, 0.0)))
-    # pallet racking flanking the aisle: 4 m shelf runs at two levels,
-    # upright frames at the ends, goods piled on the beams
-    for y_r in (1.6, -1.6):
-        for x_c in (-1.6, 2.0):
+    for x in (HALL_X, -HALL_X):
+        for y in _centers(HALL_Y, 3.0):
+            props.append(usd_prop_cfg(prop("SM_WallA_3M"), (x, y, 0.0)))
+    # pallet racking flanking the wider aisle: four 4 m bays per side
+    # (shelves at two levels, 3 m uprights at the bay ends, goods on
+    # the beams); bays spaced 4.4 m so the junction uprights twin up
+    # without coincident-frame z-fighting
+    for y_r in (RACK_Y, -RACK_Y):
+        for x_c in (-6.6, -2.2, 2.2, 6.6):
             for z_lvl in (0.35, 1.45):
                 props.append(usd_prop_cfg(prop("SM_RackShelf_01"), (x_c, y_r, z_lvl)))
             for x_e in (x_c - 2.0, x_c + 2.0):
                 props.append(usd_prop_cfg(prop("SM_RackFrame_03"), (x_e, y_r, 1.5)))
             props.append(usd_prop_cfg(prop("SM_RackPile_03"), (x_c - 1.2, y_r, 0.40)))
             props.append(usd_prop_cfg(prop("SM_RackPile_04"), (x_c + 0.9, y_r, 0.42)))
-    # floor goods near the aisle ends
-    props.append(usd_prop_cfg(prop("SM_PaletteA_02"), (3.3, -1.2, 0.0)))
-    props.append(usd_prop_cfg(prop("SM_CardBoxA_01"), (3.3, -1.2, 0.34)))
-    props.append(usd_prop_cfg(prop("SM_CardBoxB_01"), (-3.3, 1.2, 0.0)))
-    props.append(usd_prop_cfg(prop("SM_CratePlastic_A_01"), (-3.3, -1.2, 0.0)))
+    # floor goods in front of the racks (outside the +-0.55 delivery
+    # lanes, clear of the shelf line)
+    props.append(usd_prop_cfg(prop("SM_PaletteA_02"), (6.6, -2.0, 0.0)))
+    props.append(usd_prop_cfg(prop("SM_CardBoxA_01"), (6.6, -2.0, 0.34)))
+    props.append(usd_prop_cfg(prop("SM_CardBoxB_01"), (-6.6, 2.0, 0.0)))
+    props.append(usd_prop_cfg(prop("SM_CratePlastic_A_01"), (-6.6, -2.0, 0.0)))
     # wall-mounted gear + traffic furniture (cones OUT of the
     # +-0.55 delivery lanes - at +-0.85 they left ~2 cm to the
     # base corners and one run ground to a halt against one)
-    props.append(usd_prop_cfg(prop("SM_FuseBox_01"), (4.45, 1.9, 0.0)))
+    props.append(usd_prop_cfg(prop("SM_FuseBox_01"), (HALL_X - 0.05, 1.9, 0.0)))
     props.append(usd_prop_cfg(prop("S_TrafficCone"), (-0.4, -1.4, 0.0)))
     props.append(usd_prop_cfg(prop("S_TrafficCone"), (-1.6, 1.4, 0.0)))
     props.append(usd_prop_cfg(prop("S_AisleSign"), (1.2, -1.1, 0.0), rot_z=180.0))

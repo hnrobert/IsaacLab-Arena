@@ -1,7 +1,8 @@
-"""One-off visual check: render warehouse kit props offscreen.
+"""One-off visual check: render the warehouse hall dressing offscreen.
 
 Verifies the MDL materials compile and show their textures (not the
-red error fallback) after the OmniUe4 base MDLs were restored:
+red error fallback), and that the scaled hall enclosure (full wall
+runs, closed corners) looks right:
 
     docker exec isaaclab_arena-latest bash -c \
       "cd /workspaces/isaaclab_arena && /isaac-sim/python.sh \
@@ -22,19 +23,14 @@ simulation_app = app_launcher.app
 
 """Now the sim is alive."""
 
-import torch
-
 import isaaclab.sim as sim_utils
-from g1d_config import WAREHOUSE
+import torch
+from g1d_scene import build_warehouse_props, rotate_props, usd_prop_cfg
 from isaaclab.assets import AssetBaseCfg
 from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
 from isaaclab.sensors.camera import CameraCfg
 from isaaclab.sim import SimulationCfg, SimulationContext
 from isaaclab.utils import configclass
-
-
-def prop(name):
-    return os.path.join(WAREHOUSE, "Props", name + ".usd")
 
 
 def lookat_quat_xyzw(pos, target, up=(0.0, 0.0, 1.0)):
@@ -72,59 +68,49 @@ class CheckSceneCfg(InteractiveSceneCfg):
     light = AssetBaseCfg(prim_path="/World/Light", spawn=sim_utils.DomeLightCfg(intensity=2000.0))
     cam = CameraCfg(
         prim_path="{ENV_REGEX_NS}/Camera",
-        height=480,
-        width=640,
+        height=720,
+        width=1280,
         data_types=["rgb"],
         spawn=sim_utils.PinholeCameraCfg(focal_length=18.0),
         offset=CameraCfg.OffsetCfg(
-            pos=(3.0, 3.0, 2.2),
-            rot=lookat_quat_xyzw((3.0, 3.0, 2.2), (0.0, 0.0, 0.6)),
+            pos=(15.0, 11.0, 12.0),
+            rot=lookat_quat_xyzw((15.0, 11.0, 12.0), (0.0, 0.0, 0.5)),
             convention="opengl",
         ),
     )
-    wall = AssetBaseCfg(
-        prim_path="{ENV_REGEX_NS}/wall",
-        spawn=sim_utils.UsdFileCfg(usd_path=prop("SM_WallA_3M")),
-        init_state=AssetBaseCfg.InitialStateCfg(pos=(-1.5, 0.0, 0.0)),
-    )
-    floor = AssetBaseCfg(
-        prim_path="{ENV_REGEX_NS}/floor",
-        spawn=sim_utils.UsdFileCfg(usd_path=prop("SM_floor02")),
-        init_state=AssetBaseCfg.InitialStateCfg(pos=(0.0, 0.0, 0.002)),
-    )
-    stripe = AssetBaseCfg(
-        prim_path="{ENV_REGEX_NS}/stripe",
-        spawn=sim_utils.UsdFileCfg(usd_path=prop("SM_FloorDecal_StripeFull_4m")),
-        init_state=AssetBaseCfg.InitialStateCfg(pos=(0.0, -0.62, 0.004)),
-    )
-    rack = AssetBaseCfg(
-        prim_path="{ENV_REGEX_NS}/rack",
-        spawn=sim_utils.UsdFileCfg(usd_path=prop("SM_RackShelf_01")),
-        init_state=AssetBaseCfg.InitialStateCfg(pos=(0.0, 1.8, 0.35)),
+    cam2 = CameraCfg(
+        prim_path="{ENV_REGEX_NS}/Camera2",
+        height=720,
+        width=1280,
+        data_types=["rgb"],
+        spawn=sim_utils.PinholeCameraCfg(focal_length=24.0),
+        offset=CameraCfg.OffsetCfg(
+            pos=(-7.0, 0.0, 1.6),
+            rot=lookat_quat_xyzw((-7.0, 0.0, 1.6), (9.0, 0.0, 1.0)),
+            convention="opengl",
+        ),
     )
 
 
 def main() -> None:
     sim = SimulationContext(SimulationCfg(dt=1.0 / 60, device="cpu"))
+    # the full hall dressing, attached like G1DSceneCfg does
+    for i, cfg in enumerate(build_warehouse_props()):
+        setattr(CheckSceneCfg, f"wh_prop_{i:02d}", cfg)
     scene = InteractiveScene(CheckSceneCfg(num_envs=1, env_spacing=0.0))
+    rotate_props()  # apply the recorded wall/prop yaw rotations
     sim.reset()
     for _ in range(12):  # RTX warmup frames
         sim.render()
-    cam = scene["cam"]
-    cam.update(dt=sim.get_physics_dt())
-    rgb = cam.data.output["rgb"]
-    out = "/workspaces/isaaclab_arena/g1d_demo/_render_check.png"
-    img = rgb[0].cpu().numpy()
-    try:
+    for name, tag in (("cam", "hall"), ("cam2", "aisle")):
+        cam = scene[name]
+        cam.update(dt=sim.get_physics_dt())
+        img = cam.data.output["rgb"][0].cpu().numpy()
+        out = f"/workspaces/isaaclab_arena/g1d_demo/_render_check_{tag}.png"
         from PIL import Image
 
         Image.fromarray(img[:, :, :3]).save(out)
-    except ImportError:
-        import torchvision.utils as vutils
-
-        vutils.save_image(torch.from_numpy(img[:, :, :3]).permute(2, 0, 1), out)
-    print("mean rgb:", img[:, :, :3].reshape(-1, 3).mean(axis=0))
-    print("saved", out, flush=True)
+        print(f"saved {out} mean {img[:, :, :3].reshape(-1, 3).mean(axis=0)}", flush=True)
 
 
 main()

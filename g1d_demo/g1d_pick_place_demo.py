@@ -164,8 +164,19 @@ def main() -> None:
             # creep the last 0.25 m dead-straight - any yaw at the
             # standoff digs a nose corner into the face
             if not driver.drive_to(pre_wall, target_y=ty, tol=0.05, lat_cap=0.55):
-                print(f"{name}: drive to pre-wall FAILED", flush=True)
-                continue
+                # WEDGE ESCAPE: a failed approach usually means the
+                # base is jammed on pad litter (dropped totes drift
+                # across the return corridor over long runs - seen
+                # wedged at y -0.5 after 18 placements, every later
+                # spin silently timing out). Back off hard, square
+                # up on the centerline, retry the approach once
+                print(f"{name}: pre-wall failed -> wedge escape", flush=True)
+                driver.back_straight(0.80, speed=0.15)
+                driver.spin_to(0.0, timeout=15.0)
+                driver.drive_to(0.5, target_y=0.0, tol=0.08, timeout=30.0)
+                if not driver.drive_to(pre_wall, target_y=ty, tol=0.05, lat_cap=0.55):
+                    print(f"{name}: drive to pre-wall FAILED", flush=True)
+                    continue
             driver.spin_to(0.0, timeout=8.0)
             if not driver.drive_to(standoff, target_y=ty, tol=0.03):
                 print(f"{name}: drive to station FAILED", flush=True)
