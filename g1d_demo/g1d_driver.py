@@ -335,7 +335,10 @@ class G1DDriver:
         abort_attach=True stops the ramp the moment a proximity
         snap fires - continuing to the commanded dip AFTER the tote
         is glued plows the fingers through the tote (the pickup
-        jitter) - and returns True.
+        jitter) - and returns True. The abort is checked EVERY
+        PHYSICS STEP inside the hold: the old per-chunk check let
+        the remaining ~0.15 s of a down-step run on after the snap
+        (the redundant press-down right after pickup).
         """
         pose = list(pose)
         deadline = timeout / self.sim.get_physics_dt()
@@ -349,7 +352,22 @@ class G1DDriver:
                 self.hold_arm(pose, 0.1)
                 return True
             nxt = [c + max(-step, min(step, d)) for c, d in zip(cur, deltas)]
-            self.hold_arm(nxt, hold)
+            nxt_t = torch.as_tensor(nxt, dtype=torch.float32, device=self.device)
+
+            def _cmd(_nxt_t=nxt_t):
+                if abort_attach and self._attach is not None:
+                    # snap fired mid-hold: freeze on the MEASURED
+                    # joints - do not finish the down-step
+                    cmd = self._baseline()
+                    cmd[0, self.arm_ids] = torch.as_tensor(
+                        self.right_arm_now(), dtype=torch.float32, device=self.device
+                    )
+                else:
+                    cmd = self._baseline()
+                    cmd[0, self.arm_ids] = _nxt_t
+                self.robot.set_joint_position_target(cmd)
+
+            self.run_seconds(hold, every_step=_cmd)
             waited += int(hold / self.sim.get_physics_dt())
         return False
 
@@ -375,50 +393,6 @@ class G1DDriver:
         return False
 
     # ---- base motion ----
-
-    def shunt_lateral(self, line_y: float = 0.0, timeout: float = 15.0, tol: float = 0.08) -> bool:
-        """Translate sideways onto the y=line_y rail (endgame align).
-
-        The creep diagonal is x-AWARE: near the station (x > 1.2)
-        it runs BACKWARD-diagonal, away from the station face -
-        the old fixed +-0.6 forward-diagonal jammed the nose on
-        the face and every standoff shunt MISSed with y frozen.
-        A stall guard gives up after 2 s without y progress.
-        """
-        x0, y0, _ = self.pose()
-        if abs(y0 - line_y) < tol:
-            return True
-        want_up = line_y > y0
-        if x0 > 1.2:  # station apron - creep AWAY from its face
-            target_yaw = math.pi - 0.6 if want_up else math.pi + 0.6
-        else:  # open aisle - forward-diagonal is clear
-            target_yaw = 0.6 if want_up else -0.6
-        if not self.spin_to(target_yaw, timeout=10.0):
-            return False
-        dt = self.sim.get_physics_dt()
-        deadline = timeout / dt
-        waited = 0
-        ref_y, ref_t = y0, 0
-        while waited < deadline:
-            _, y, _ = self.pose()
-            if abs(y - line_y) < 0.04:
-                break
-            if (waited - ref_t) >= int(2.0 / dt):
-                if abs(y - ref_y) < 0.005:
-                    break  # grinding something - give up
-                ref_y, ref_t = y, waited
-            self.wheels(0.15, 0.15)
-            self.robot.write_data_to_sim()
-            self._step()
-            self._refresh()
-            waited += 1
-        self.wheels(0.0, 0.0)
-        ok = abs(self.pose()[1] - line_y) < 0.06
-        print(
-            f"shunt: x={self.pose()[0]:.2f} y={self.pose()[1]:+.3f} (line {line_y:+.2f}) {'OK' if ok else 'MISS'}",
-            flush=True,
-        )
-        return self.spin_to(0.0, timeout=10.0) and ok
 
     def drive_to(
         self,
@@ -448,7 +422,6 @@ class G1DDriver:
         dt = self.sim.get_physics_dt()
         deadline = timeout / dt
         waited = 0
-        shunts = 0
         ref_x, ref_t = None, 0
         while waited < deadline:
             x, y, yaw = self.pose()
@@ -457,34 +430,24 @@ class G1DDriver:
             if ref_x is None:
                 ref_x = x
             # stall detector: grinding against an edge (seen: nose
-            # jammed on the station wall at dx 0.077 forever) -> free
-            # the line with a shunt, or accept a loose arrival.
-            # Compare over an 8 s WINDOW - at crawl speed the base
-            # moves ~1 mm/step, so per-step diffs always look stuck.
+            # jammed on the station wall at dx 0.077 forever) ->
+            # accept a loose arrival. Compare over an 8 s WINDOW -
+            # at crawl speed the base moves ~1 mm/step, so
+            # per-step diffs always look stuck. (The old reaction
+            # was a lateral shunt - it NEVER once closed y and the
+            # ~110-deg spin out and back read as the base rocking
+            # back and forth on the corner slots; the snap radius
+            # and the runway re-approach cover the loose y.)
             if (waited - ref_t) >= int(4.0 / dt):
                 if abs(x - ref_x) < 0.01:
-                    if shunts < 2:
-                        shunts += 1
-                        print(
-                            f"drive stalled x={x:.3f} y={y:+.3f} -> shunt",
-                            flush=True,
-                        )
-                        self.shunt_lateral(target_y)
-                    else:
-                        self.wheels(0.0, 0.0)
-                        print(f"arrived x={x:.3f} y={y:.3f} (stalled-loose) (target {target_x:.3f})", flush=True)
-                        return True
-                    ref_x, ref_t = x, waited
-                else:
-                    ref_x, ref_t = x, waited
+                    self.wheels(0.0, 0.0)
+                    print(f"arrived x={x:.3f} y={y:.3f} (stalled-loose) (target {target_x:.3f})", flush=True)
+                    return True
+                ref_x, ref_t = x, waited
             if abs(dx) < tol and abs(yaw) < 0.25:
                 if lat_tol is not None and abs(dy_line) >= lat_tol:
                     continue  # x is there, y is not - keep steering
                 if abs(dy_line) >= 0.08:
-                    if shunts < 2:
-                        shunts += 1
-                        self.shunt_lateral(target_y)
-                        continue
                     self.wheels(0.0, 0.0)
                     print(f"arrived x={x:.3f} y={y:.3f} (loose) (target {target_x:.3f})", flush=True)
                     return True

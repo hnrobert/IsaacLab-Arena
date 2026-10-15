@@ -77,9 +77,14 @@ FINGER_CRADLE = 0.35  # fraction of FINGER_CLOSE for the carry wrap
 # physical pinch at all - offset probe-calibrated on the hand rig).
 # 0.25: generous on purpose - the drive-in drape and the extreme
 # slots leave the jaw 0.15-0.20 m off the tote line, and the base
-# physically cannot align closer (station-face nose grind); the
-# hover gateway still clears vertically, so it cannot fire early
-SNAP_RADIUS = 0.25
+# physically cannot align closer (station-face nose grind). 0.30
+# so the snap fires AT THE HOVER GATEWAY for every slot (dz 0.15
+# + drape dy up to 0.25): the dip ladder in the demo then never
+# runs - the box jumps to the palm straight from the gateway
+# height, with no press-down before or after the snap (at 0.25
+# the off-center slots only attached at dip depth, and the arm
+# sat IN the pressed pose at the moment of the teleport)
+SNAP_RADIUS = 0.30
 # x along the middle-finger link: 0.30 floated the box a hand-
 # length past the jaw, 0.08 still left it ahead of the fingertips
 # (user: one box edge closer to the body) - -0.02 pulls it a full
@@ -90,13 +95,13 @@ SNAP_OFFSET = (-0.02, 0.0, -0.09)
 # the snap point is ANCHORED to the palm link (not the finger):
 # at attach the world target = the seed point above, shifted up /
 # left / back in the BASE frame - finger curls and arm rotations
-# then no longer displace the box relative to the palm. The held
-# box's COLLIDER is switched off for the ride (see attach()), so
-# ANY height is contact-free - historically 0.06-0.16 straddled
+# then no longer displace the box relative to the palm. The hand/
+# finger COLLIDERS are stripped at startup (strip_hand_colliders),
+# so ANY height is contact-free - historically 0.06-0.16 straddled
 # the fingertip hulls and the contact fight tumbled the box and
 # jammed the base. LEFT 0.072 / BACK 0.108 per user tuning
 # (0.5 + 0.1 edge left, 0.9 edge rearward)
-SNAP_SHIFT_UP = 0.00
+SNAP_SHIFT_UP = 0.10
 SNAP_SHIFT_LEFT = 0.072
 SNAP_SHIFT_BACK = 0.108
 
