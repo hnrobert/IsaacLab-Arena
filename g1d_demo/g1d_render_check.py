@@ -26,6 +26,7 @@ simulation_app = app_launcher.app
 import isaaclab.sim as sim_utils
 import torch
 from g1d_scene import build_warehouse_props, rotate_props, usd_prop_cfg
+from g1d_usd import bind_placeholder_materials
 from isaaclab.assets import AssetBaseCfg
 from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
 from isaaclab.sensors.camera import CameraCfg
@@ -85,8 +86,8 @@ class CheckSceneCfg(InteractiveSceneCfg):
         data_types=["rgb"],
         spawn=sim_utils.PinholeCameraCfg(focal_length=24.0),
         offset=CameraCfg.OffsetCfg(
-            pos=(-7.0, 0.0, 1.6),
-            rot=lookat_quat_xyzw((-7.0, 0.0, 1.6), (9.0, 0.0, 1.0)),
+            pos=(0.4, -2.7, 1.1),
+            rot=lookat_quat_xyzw((0.4, -2.7, 1.1), (0.4, -1.25, 0.25)),
             convention="opengl",
         ),
     )
@@ -99,6 +100,24 @@ def main() -> None:
         setattr(CheckSceneCfg, f"wh_prop_{i:02d}", cfg)
     scene = InteractiveScene(CheckSceneCfg(num_envs=1, env_spacing=0.0))
     rotate_props()  # apply the recorded wall/prop yaw rotations
+    bind_placeholder_materials()
+    # hard evidence: world-space z ranges of the rack uprights on the
+    # live stage (feet must sit at z ~0, tops at z ~3)
+    from pxr import Usd, UsdGeom
+
+    stage = sim.stage if hasattr(sim, "stage") else None
+    import omni.usd
+
+    stage = omni.usd.get_context().get_stage()
+    cache = UsdGeom.BBoxCache(Usd.TimeCode.Default(), [UsdGeom.Tokens.default_])
+    checked = 0
+    for prim in stage.Traverse():
+        if "SM_RackFrame" not in prim.GetName():
+            continue
+        r = cache.ComputeWorldBound(prim).ComputeAlignedRange()
+        print("upright %-28s world z: %.2f .. %.2f" % (prim.GetPath(), r.GetMin()[2], r.GetMax()[2]), flush=True)
+        checked += 1
+    print(f"checked {checked} uprights", flush=True)
     sim.reset()
     for _ in range(12):  # RTX warmup frames
         sim.render()

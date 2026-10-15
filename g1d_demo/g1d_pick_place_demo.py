@@ -64,6 +64,7 @@ from g1d_scene import G1DSceneCfg, rotate_props
 from g1d_usd import (
     add_grip_material,
     arm_collision_hand_only,
+    bind_placeholder_materials,
     disable_agv_shell_collision,
     select_physx_variant,
     strip_arm_colliders,
@@ -89,6 +90,7 @@ def main() -> None:
     scene = InteractiveScene(scene_cfg)
 
     rotate_props()
+    bind_placeholder_materials()
     add_grip_material()
     select_physx_variant("/World/envs/env_0/Robot")
     if not disable_agv_shell_collision():

@@ -1,7 +1,9 @@
 """Live-stage USD surgery: physics variant, colliders, materials."""
 
+import os
+
 import omni.usd
-from g1d_config import TOTE_NAMES
+from g1d_config import TOTE_NAMES, WAREHOUSE
 
 
 def select_physx_variant(robot_prim_path: str) -> None:
@@ -85,6 +87,63 @@ def arm_collision_hand_only() -> int:
         stripped += 1
         print(f"collision off: {path}", flush=True)
     return stripped
+
+
+def bind_placeholder_materials(env_ns="/World/envs/env_0"):
+    """Rebind the cone + sign props to UsdPreviewSurface networks.
+
+    Their MDL materials (M_TrafficCone/M_AisleSign) bake the texture
+    paths into the material BODY (no texture parameters), and the RTX
+    real-time renderer resolves those './Textures/...' defaults
+    differently from the offscreen path - the props rendered pitch
+    black in the GUI. PreviewSurface + USD-anchored PNGs renders the
+    same everywhere (every functional cuboid in the scene uses it).
+    Textures: g1d_make_textures.py output.
+    """
+    from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade
+
+    tex = os.path.join(WAREHOUSE, "Materials", "Textures")
+
+    def preview_material(stage, path, diffuse_png, roughness):
+        mat = UsdShade.Material.Define(stage, path)
+        shader = UsdShade.Shader.Define(stage, path + "/PreviewSurface")
+        shader.CreateIdAttr("UsdPreviewSurface")
+        shader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(roughness)
+        shader.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(0.0)
+        tex_node = UsdShade.Shader.Define(stage, path + "/DiffuseTex")
+        tex_node.CreateIdAttr("UsdUVTexture")
+        tex_node.CreateInput("file", Sdf.ValueTypeNames.Asset).Set(diffuse_png)
+        tex_node.CreateInput("sourceColorSpace", Sdf.ValueTypeNames.Token).Set("sRGB")
+        tex_node.CreateInput("wrapS", Sdf.ValueTypeNames.Token).Set("repeat")
+        tex_node.CreateInput("wrapT", Sdf.ValueTypeNames.Token).Set("repeat")
+        tex_node.CreateOutput("rgb", Sdf.ValueTypeNames.Float3)
+        reader = UsdShade.Shader.Define(stage, path + "/UVReader")
+        reader.CreateIdAttr("UsdPrimvarReader_float2")
+        reader.CreateInput("varname", Sdf.ValueTypeNames.String).Set("st")
+        reader.CreateOutput("result", Sdf.ValueTypeNames.Float2)
+        tex_node.CreateInput("st", Sdf.ValueTypeNames.Float2).ConnectToSource(reader.ConnectableAPI(), "result")
+        shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).ConnectToSource(tex_node.ConnectableAPI(), "rgb")
+        mat.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), "surface")
+        return mat
+
+    specs = {
+        # the sign's Text png IS the final look (black board, white
+        # arrow); the cone's D png has the orange body + white band
+        "S_TrafficCone": (os.path.join(tex, "T_TrafficCone_D.png"), 0.35),
+        "S_AisleSign": (os.path.join(tex, "AisleSign_Text_01.png"), 0.5),
+    }
+    stage = omni.usd.get_context().get_stage()
+    materials = {}
+    for prefix, (png, rough) in specs.items():
+        materials[prefix] = preview_material(stage, f"{env_ns}/PreviewMaterials/{prefix}Mat", png, rough)
+    bound = 0
+    for prim in stage.Traverse():
+        nm = prim.GetName()
+        for prefix, mat in materials.items():
+            if nm.startswith(prefix) and prim.GetTypeName() == "Mesh":
+                UsdShade.MaterialBindingAPI.Apply(prim).Bind(mat, UsdShade.Tokens.weakerThanDescendants)
+                bound += 1
+    print(f"placeholder materials bound to {bound} meshes", flush=True)
 
 
 def add_grip_material(env_ns="/World/envs/env_0") -> None:

@@ -117,19 +117,24 @@ def build_warehouse_props():
     # pallet racking flanking the wider aisle: four 4 m bays per side
     # (shelves at two levels, 3 m uprights at the bay ends, goods on
     # the beams); bays spaced 4.4 m so the junction uprights twin up
-    # without coincident-frame z-fighting
+    # without coincident-frame z-fighting. NOTE kit origins: the
+    # upright's origin is at its FOOT (local z 0..3) - place at 0 or
+    # it floats (the old z 1.5 lifted the columns to 1.5..4.5 m);
+    # the shelf's origin is mid-slab (local z -0.34..0.03), so the
+    # shelf z levels ride ON the beams as placed.
     for y_r in (RACK_Y, -RACK_Y):
         for x_c in (-6.6, -2.2, 2.2, 6.6):
             for z_lvl in (0.35, 1.45):
                 props.append(usd_prop_cfg(prop("SM_RackShelf_01"), (x_c, y_r, z_lvl)))
             for x_e in (x_c - 2.0, x_c + 2.0):
-                props.append(usd_prop_cfg(prop("SM_RackFrame_03"), (x_e, y_r, 1.5)))
+                props.append(usd_prop_cfg(prop("SM_RackFrame_03"), (x_e, y_r, 0.0)))
             props.append(usd_prop_cfg(prop("SM_RackPile_03"), (x_c - 1.2, y_r, 0.40)))
             props.append(usd_prop_cfg(prop("SM_RackPile_04"), (x_c + 0.9, y_r, 0.42)))
     # floor goods in front of the racks (outside the +-0.55 delivery
-    # lanes, clear of the shelf line)
+    # lanes, clear of the shelf line); box origin at its base ->
+    # stacked flush on the 0.21 m pallet
     props.append(usd_prop_cfg(prop("SM_PaletteA_02"), (6.6, -2.0, 0.0)))
-    props.append(usd_prop_cfg(prop("SM_CardBoxA_01"), (6.6, -2.0, 0.34)))
+    props.append(usd_prop_cfg(prop("SM_CardBoxA_01"), (6.6, -2.0, 0.21)))
     props.append(usd_prop_cfg(prop("SM_CardBoxB_01"), (-6.6, 2.0, 0.0)))
     props.append(usd_prop_cfg(prop("SM_CratePlastic_A_01"), (-6.6, -2.0, 0.0)))
     # wall-mounted gear + traffic furniture (cones OUT of the
@@ -138,7 +143,9 @@ def build_warehouse_props():
     props.append(usd_prop_cfg(prop("SM_FuseBox_01"), (HALL_X - 0.05, 1.9, 0.0)))
     props.append(usd_prop_cfg(prop("S_TrafficCone"), (-0.4, -1.4, 0.0)))
     props.append(usd_prop_cfg(prop("S_TrafficCone"), (-1.6, 1.4, 0.0)))
-    props.append(usd_prop_cfg(prop("S_AisleSign"), (1.2, -1.1, 0.0), rot_z=180.0))
+    # S_AisleSign's origin is CENTERED (local z -0.39..0.39) - lift
+    # it half its height or it sits half-buried
+    props.append(usd_prop_cfg(prop("S_AisleSign"), (1.2, -1.1, 0.39), rot_z=180.0))
     return props
 
 
