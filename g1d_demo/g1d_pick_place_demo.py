@@ -61,7 +61,13 @@ from g1d_config import (
 )
 from g1d_driver import G1DDriver, RenderStepper, n, reset_tote
 from g1d_scene import G1DSceneCfg, rotate_props
-from g1d_usd import add_grip_material, arm_collision_hand_only, disable_agv_shell_collision, select_physx_variant
+from g1d_usd import (
+    add_grip_material,
+    arm_collision_hand_only,
+    disable_agv_shell_collision,
+    select_physx_variant,
+    strip_hand_colliders,
+)
 from isaaclab.scene import InteractiveScene
 from isaaclab.sim import SimulationCfg, SimulationContext
 
@@ -87,6 +93,11 @@ def main() -> None:
     select_physx_variant("/World/envs/env_0/Robot")
     if not disable_agv_shell_collision():
         carb.log_warn("AGV_link_1 not found - shell collision stays on")
+    # hand colliders OFF by default: the grasp/carry are kinematic
+    # and fingertip hulls fighting the held box at low ride
+    # heights tumbled it and jammed the base
+    n_hand = strip_hand_colliders()
+    print(f"hand colliders stripped: {n_hand}", flush=True)
     if args_cli.hand_only_collision:
         n_off = arm_collision_hand_only()
         print(f"hand-only collision: {n_off} arm colliders stripped", flush=True)
@@ -116,8 +127,11 @@ def main() -> None:
         print(f"camera setup skipped: {exc}", flush=True)
 
     # arm UP before the first wheel turns - it stays up for every
-    # approach (user spec: raised from the start)
-    driver.hold_arm(ARM_HIGH.tolist(), 0.5)
+    # approach (user spec: raised from the start). Smooth ramp: a
+    # raw hold_arm here snapped the 1.45-rad shoulder swing shut
+    # in ~0.3 s (one of the "finishes too fast" swings)
+    driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.5, timeout=8.0)
+    driver.hold_arm(ARM_HIGH.tolist(), 0.2)
     driver.fingers_to(FINGER_OPEN)
 
     picks = 0
@@ -186,7 +200,7 @@ def main() -> None:
             # swing out OVER the slot, then a small elbow dip - the
             # snap radius normally fires partway down ARM_DOCK, and
             # ARM_GRASP is only a drape fallback
-            driver.move_arm_smooth(ARM_HOVER.tolist(), speed=0.6)
+            driver.move_arm_smooth(ARM_HOVER.tolist(), speed=0.5)
             driver.hold_arm(ARM_HOVER.tolist(), 0.2)
             driver.arm_capture(tote)
             # small SHOULDER dips only, and the ramp ABORTS the
@@ -222,7 +236,9 @@ def main() -> None:
             pose = driver.right_arm_now()
             lift = list(pose)
             lift[0] -= 0.15  # rise ~12 cm before any base motion
-            driver.move_arm_smooth(lift, speed=0.6)
+            # gentle: at speed 0.6 the small 0.15-rad pop completed
+            # in ~0.25 s - visibly abrupt (another too-fast swing)
+            driver.move_arm_smooth(lift, speed=0.35)
             carry_hold = hold_cmd(driver, lift, FINGER_OPEN.tolist())
 
             # --- clear the station, U-turn 180 deg ----------------
@@ -241,7 +257,7 @@ def main() -> None:
             # --- level the arm (平举) + forward delivery ----------
             # leveling AFTER the spin: a level arm sweeps the held
             # tote through the station board / neighboring totes
-            driver.move_arm_smooth(ARM_LEVEL.tolist(), speed=0.6, timeout=15.0)
+            driver.move_arm_smooth(ARM_LEVEL.tolist(), speed=0.5, timeout=15.0)
             carry_hold = hold_cmd(driver, ARM_LEVEL.tolist(), FINGER_OPEN.tolist())
             # settle the arm before measuring the box lead - the
             # level swing changes it mid-motion (0.5 -> 0.67 m and

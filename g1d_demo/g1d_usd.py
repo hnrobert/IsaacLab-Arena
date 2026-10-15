@@ -13,6 +13,32 @@ def select_physx_variant(robot_prim_path: str) -> None:
         print("physics variant: physx selected", flush=True)
 
 
+def strip_hand_colliders() -> int:
+    """Remove every hand/finger collider - the DEFAULT for the
+    snap demo.
+
+    The grasp is a kinematic snap and the carry a rigid pose
+    write, so hand colliders have no functional role - and the
+    fingertip hulls fighting the held box at low ride heights
+    tumbled the box and jammed the base. (Tried toggling the
+    TOTE's collider at runtime instead: disabling works but the
+    GPU pipeline never re-registers it - the released box fell
+    through the ground plane to z -3.3.)
+    """
+    from pxr import UsdPhysics as Phys
+
+    stage = omni.usd.get_context().get_stage()
+    stripped = 0
+    for prim in stage.Traverse():
+        path = str(prim.GetPath())
+        if "/Robot/" not in path or not prim.HasAPI(Phys.CollisionAPI):
+            continue
+        if "hand" in path.lower():
+            Phys.CollisionAPI(prim).CreateCollisionEnabledAttr(False)
+            stripped += 1
+    return stripped
+
+
 def disable_agv_shell_collision() -> bool:
     """Deactivate the AGV shell collision (steals ground contact)."""
     stage = omni.usd.get_context().get_stage()

@@ -90,15 +90,13 @@ SNAP_OFFSET = (-0.02, 0.0, -0.09)
 # the snap point is ANCHORED to the palm link (not the finger):
 # at attach the world target = the seed point above, shifted up /
 # left / back in the BASE frame - finger curls and arm rotations
-# then no longer displace the box relative to the palm. UP is
-# 0.20, not the user's original 0.12: at +0.12 the box bottom
-# intersected the OPEN fingertips by 1-3 cm and the contact
-# solver fought the kinematic pose write every step - the box
-# visibly tumbled in the hand. +0.20 lifts the bottom ~5 cm
-# clear of the fingertips: zero contact, and the release-drop no
-# longer clips them either. LEFT 0.072 and BACK 0.108 per user
-# tuning (0.5 + 0.1 edge left, 0.9 edge rearward)
-SNAP_SHIFT_UP = 0.10
+# then no longer displace the box relative to the palm. The held
+# box's COLLIDER is switched off for the ride (see attach()), so
+# ANY height is contact-free - historically 0.06-0.16 straddled
+# the fingertip hulls and the contact fight tumbled the box and
+# jammed the base. LEFT 0.072 / BACK 0.108 per user tuning
+# (0.5 + 0.1 edge left, 0.9 edge rearward)
+SNAP_SHIFT_UP = 0.00
 SNAP_SHIFT_LEFT = 0.072
 SNAP_SHIFT_BACK = 0.108
 
