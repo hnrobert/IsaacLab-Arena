@@ -1,0 +1,56 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+
+//* 1.0.0 - UE4 function using mdl 1.7
+
+mdl 1.7;
+
+import ::df::*;
+import ::state::*;
+import ::math::*;
+import ::tex::*;
+import ::anno::*;
+
+
+export float unpack_integer_as_float(float InFloat)
+[[
+    anno::description("ms_PivotPainter2_UnpackIntegerAsFloat"),
+	anno::noinline()
+]]
+{
+	int uRes32 = math::float_bits_to_int(InFloat);
+	int sign2 = ((uRes32>>16)&0x8000);
+	int exp2  = (((((uRes32>>23)&0xff))-127+15) << 10);
+	int mant2 = ((uRes32>>13)&0x3ff);
+	int bits = (sign2 | exp2 | mant2);
+	int result = bits - 1024;
+
+	return float(result);
+}
+
+export int f32tof16(float InFloat)
+[[
+    anno::description("hlsl f32tof16"),
+	anno::noinline()
+]]
+{
+    int b = math::float_bits_to_int(InFloat)+0x00001000; // round-to-nearest-even: add last bit after truncated mantissa
+    int e = (b&0x7F800000)>>23; // exponent
+    int m = b&0x007FFFFF;
+    return (b&0x80000000)>>16 | (e>112)*((((e-112)<<10)&0x7C00)|m>>13) | ((e<113)&(e>101))*((((0x007FF000+m)>>(125-e))+1)>>1) | (e>143)*0x7FFF;
+}
+
+export float f16tof32(int InInt32)
+[[
+    anno::description("hlsl f16tof32"),
+	anno::noinline()
+]]
+{
+	int e = (InInt32&0x7C00)>>10; // exponent
+    int m = (InInt32&0x03FF)<<13; // mantissa
+    int v = math::float_bits_to_int(float(m))>>23;
+    return math::int_bits_to_float((InInt32&0x8000)<<16 | (e!=0)*((e+112)<<23|m) | ((e==0)&(m!=0))*((v-37)<<23|((m<<(150-v))&0x007FE000)));
+}
