@@ -13,27 +13,31 @@ def select_physx_variant(robot_prim_path: str) -> None:
         print("physics variant: physx selected", flush=True)
 
 
-def strip_hand_colliders() -> int:
-    """Remove every hand/finger collider - the DEFAULT for the
-    snap demo.
+def strip_arm_colliders() -> int:
+    """Remove every ARM collider (shoulder..fingertips) - the
+    DEFAULT for the snap demo.
 
     The grasp is a kinematic snap and the carry a rigid pose
-    write, so hand colliders have no functional role - and the
-    fingertip hulls fighting the held box at low ride heights
-    tumbled the box and jammed the base. (Tried toggling the
-    TOTE's collider at runtime instead: disabling works but the
-    GPU pipeline never re-registers it - the released box fell
-    through the ground plane to z -3.3.)
+    write, so arm colliders have no functional role - and the
+    held box (its own collider stays ON so the drop is physical)
+    wedging the WRIST/FOREARM hulls shoved the arm the whole
+    carry: commanded lifts sagged into a fold (sh -0.65 -> -0.33,
+    hand z 0.99 -> 0.73 over 10 s) - the visible "press-down
+    after pickup". Wheels, casters and the AGV body keep their
+    colliders. (Tried toggling the TOTE collider at runtime
+    instead: disabling works but the GPU pipeline never
+    re-registers it - the released box fell through the ground.)
     """
     from pxr import UsdPhysics as Phys
 
     stage = omni.usd.get_context().get_stage()
+    parts = ("hand", "arm", "wrist", "forearm", "shoulder", "elbow")
     stripped = 0
     for prim in stage.Traverse():
         path = str(prim.GetPath())
         if "/Robot/" not in path or not prim.HasAPI(Phys.CollisionAPI):
             continue
-        if "hand" in path.lower():
+        if any(p in path.lower() for p in parts):
             Phys.CollisionAPI(prim).CreateCollisionEnabledAttr(False)
             stripped += 1
     return stripped

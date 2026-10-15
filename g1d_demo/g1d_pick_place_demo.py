@@ -66,7 +66,7 @@ from g1d_usd import (
     arm_collision_hand_only,
     disable_agv_shell_collision,
     select_physx_variant,
-    strip_hand_colliders,
+    strip_arm_colliders,
 )
 from isaaclab.scene import InteractiveScene
 from isaaclab.sim import SimulationCfg, SimulationContext
@@ -96,7 +96,7 @@ def main() -> None:
     # hand colliders OFF by default: the grasp/carry are kinematic
     # and fingertip hulls fighting the held box at low ride
     # heights tumbled it and jammed the base
-    n_hand = strip_hand_colliders()
+    n_hand = strip_arm_colliders()
     print(f"hand colliders stripped: {n_hand}", flush=True)
     if args_cli.hand_only_collision:
         n_off = arm_collision_hand_only()
@@ -225,20 +225,21 @@ def main() -> None:
                 continue
             picks += 1
             print(f"  t+{(stepper.steps - t0_steps) / 60.0:.0f}s snapped", flush=True)
+            print(f"  TRACE snap arm={[round(v, 3) for v in driver.right_arm_now()]}", flush=True)
 
             # --- lift clear, fingers stay OPEN ----------------------
-            # freeze the arm where the snap fired (mid-dip) and
-            # rise off the post. NO finger curl while holding: the
-            # box rides AT the fingertip line now, and curling the
-            # fingers into the kinematic box is a contact fight
-            # that deflected the arm and scattered the drops - the
-            # box sits on the open palm like a tray instead
+            # STEP-HOLDS while holding, never per-step ramps: after
+            # the snap the per-step re-targeted ramp (move_arm_smooth)
+            # LOSES authority - the arm sags under gravity the whole
+            # ramp (bisected: sh -0.65 -> -0.33 over 10 s, hand
+            # 0.99 -> 0.73) while a SUSTAINED hold tracks perfectly
+            # (2 s direct hold reached -0.787 of -0.799). Suspected
+            # interplay with the per-step tote root-pose write. That
+            # sag was the "press-down after pickup"
             pose = driver.right_arm_now()
             lift = list(pose)
             lift[0] -= 0.15  # rise ~12 cm before any base motion
-            # gentle: at speed 0.6 the small 0.15-rad pop completed
-            # in ~0.25 s - visibly abrupt (another too-fast swing)
-            driver.move_arm_smooth(lift, speed=0.35)
+            driver.move_arm_slow(lift, step=0.05, hold=0.15)
             carry_hold = hold_cmd(driver, lift, FINGER_OPEN.tolist())
 
             # --- clear the station, U-turn 180 deg ----------------
@@ -256,8 +257,10 @@ def main() -> None:
 
             # --- level the arm (平举) + forward delivery ----------
             # leveling AFTER the spin: a level arm sweeps the held
-            # tote through the station board / neighboring totes
-            driver.move_arm_smooth(ARM_LEVEL.tolist(), speed=0.5, timeout=15.0)
+            # tote through the station board / neighboring totes.
+            # Step-holds here too - the smooth ramp sags while the
+            # tote pose write runs every step (see the lift note)
+            driver.move_arm_slow(ARM_LEVEL.tolist(), step=0.08, hold=0.12, timeout=15.0)
             carry_hold = hold_cmd(driver, ARM_LEVEL.tolist(), FINGER_OPEN.tolist())
             # settle the arm before measuring the box lead - the
             # level swing changes it mid-motion (0.5 -> 0.67 m and
