@@ -1,4 +1,4 @@
-"""Scene construction: warehouse kit dressing, station, totes, robot."""
+"""Scene construction: warehouse hall dressing, 12-table grid, objects, robot."""
 
 import os
 
@@ -9,42 +9,31 @@ from g1d_config import (
     HALL_X,
     HALL_Y,
     HOME_ROOT_Z,
-    PAD_COLOR,
-    PAD_POS,
-    PICK_TARGETS,
+    OBJECT_CATALOG,
+    OBJECT_NAMES,
+    OBJECT_ORDER,
     RACK_Y,
-    STATION_BODY,
-    STATION_TOP,
-    STATION_X,
+    STOCKED_TABLES,
+    TABLE_POS,
+    TABLE_SIZE,
+    TABLE_TOP,
     TOTE_SIZE,
-    TOTE_Z,
     WAREHOUSE,
     WHEEL_JOINTS,
+    table_slot,
 )
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg, RigidObjectCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 
+TABLE_COLOR = (0.55, 0.5, 0.42)  # wood-tone top, matches the old station
+LEG_COLOR = (0.35, 0.33, 0.3)
+
 
 def prop(name):
     """Absolute container path of a Simple_Warehouse prop."""
     return os.path.join(WAREHOUSE, "Props", name + ".usd")
-
-
-def make_tote_cfg(name: str, pos, color):
-    """One small rigid tote spawned at `pos` (x, y, z)."""
-    return RigidObjectCfg(
-        prim_path="{ENV_REGEX_NS}/" + name,
-        spawn=sim_utils.CuboidCfg(
-            size=(TOTE_SIZE, TOTE_SIZE, TOTE_SIZE),
-            rigid_props=sim_utils.RigidBodyPropertiesCfg(),
-            mass_props=sim_utils.MassPropertiesCfg(mass=0.15),
-            collision_props=sim_utils.CollisionPropertiesCfg(),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=color),
-        ),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=pos),
-    )
 
 
 _PROP_ROT = {}
@@ -93,6 +82,70 @@ def _centers(half, step):
     return [-half + step * (i + 0.5) for i in range(int(round(n)))]
 
 
+def build_tables():
+    """12 work tables: a top slab plus four legs each, as spawn cfgs."""
+    cfgs = []
+    tx_len, ty_len, t_thick = TABLE_SIZE
+    leg_h = TABLE_TOP - t_thick
+    for ti, (cx, cy) in enumerate(TABLE_POS):
+        cfgs.append(
+            AssetBaseCfg(
+                prim_path=f"{{ENV_REGEX_NS}}/Table{ti:02d}",
+                spawn=sim_utils.CuboidCfg(
+                    size=(tx_len, ty_len, t_thick),
+                    collision_props=sim_utils.CollisionPropertiesCfg(),
+                    visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=TABLE_COLOR),
+                ),
+                init_state=AssetBaseCfg.InitialStateCfg(pos=(cx, cy, TABLE_TOP - t_thick / 2)),
+            )
+        )
+        # legs at the four corners (USD prim names cannot contain
+        # dots, so they are numbered, not coordinate-named)
+        for li, (lx, ly) in enumerate([
+            (-tx_len / 2 + 0.09, -ty_len / 2 + 0.09),
+            (tx_len / 2 - 0.09, -ty_len / 2 + 0.09),
+            (-tx_len / 2 + 0.09, ty_len / 2 - 0.09),
+            (tx_len / 2 - 0.09, ty_len / 2 - 0.09),
+        ]):
+            cfgs.append(
+                AssetBaseCfg(
+                    prim_path=f"{{ENV_REGEX_NS}}/Table{ti:02d}_L{li}",
+                    spawn=sim_utils.CuboidCfg(
+                        size=(0.07, 0.07, leg_h),
+                        visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=LEG_COLOR),
+                    ),
+                    init_state=AssetBaseCfg.InitialStateCfg(pos=(cx + lx, cy + ly, leg_h / 2)),
+                )
+            )
+    return cfgs
+
+
+def make_object_cfg(name: str, obj_type: str, pos):
+    """One pickable object at `pos` - a kit USD prop or a cuboid tote."""
+    usd_path, color, _grab, mass = OBJECT_CATALOG[obj_type]
+    if usd_path:
+        spawn = sim_utils.UsdFileCfg(
+            usd_path=usd_path,
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+        )
+    else:
+        spawn = sim_utils.CuboidCfg(
+            size=(TOTE_SIZE, TOTE_SIZE, TOTE_SIZE),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(),
+            mass_props=sim_utils.MassPropertiesCfg(mass=mass),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=color),
+        )
+    return RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/" + name,
+        spawn=spawn,
+        # spawn 0.25 m above the table and let it settle - the kit
+        # prop origins/heights vary, so a drop-in beats guessing z
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(pos[0], pos[1], TABLE_TOP + 0.25)),
+    )
+
+
 def build_warehouse_props():
     """All static Simple_Warehouse dressing, as spawn cfgs."""
     props = []
@@ -101,57 +154,42 @@ def build_warehouse_props():
     for x in _centers(HALL_X, 6.0):
         for y in _centers(HALL_Y, 6.0):
             props.append(usd_prop_cfg(prop("SM_floor02"), (x, y, 0.002)))
-    # aisle lane stripes (4 m decals, stopping 1 m short of the walls)
-    for x in _centers(HALL_X - 1.0, 4.0):
+    # center-corridor lane stripes (4 m decals; span tiles in 4 m)
+    for x in _centers(HALL_X - 4.0, 4.0):
         for y in (-0.62, 0.62):
             props.append(usd_prop_cfg(prop("SM_FloorDecal_StripeFull_4m"), (x, y, 0.004)))
-    # perimeter: full 3 m panel runs on all four sides. The side runs
-    # reach the end-wall lines so the corners cross-overlap solid - the
-    # old single-panel end walls left all four corners open.
+    # perimeter: full 3 m panel runs on all four sides, corners
+    # cross-overlapping solid
     for y in (HALL_Y, -HALL_Y):
         for x in _centers(HALL_X, 3.0):
             props.append(usd_prop_cfg(prop("SM_WallA_3M"), (x, y, 0.0), rot_z=90.0))
     for x in (HALL_X, -HALL_X):
         for y in _centers(HALL_Y, 3.0):
             props.append(usd_prop_cfg(prop("SM_WallA_3M"), (x, y, 0.0)))
-    # pallet racking flanking the wider aisle: four 4 m bays per side
-    # (shelves at two levels, 3 m uprights at the bay ends, goods on
-    # the beams); bays spaced 4.4 m so the junction uprights twin up
-    # without coincident-frame z-fighting. NOTE kit origins: the
-    # upright's origin is at its FOOT (local z 0..3) - place at 0 or
-    # it floats (the old z 1.5 lifted the columns to 1.5..4.5 m);
-    # the shelf's origin is mid-slab (local z -0.34..0.03), so the
-    # shelf z levels ride ON the beams as placed.
+    # pallet racking in the far north/south bands (outside the table
+    # rows): uprights sit at their FOOT (origin z 0..3), shelves ride
+    # the beams (origin mid-slab). 5 m bay pitch tiles the 40 m span.
     for y_r in (RACK_Y, -RACK_Y):
-        for x_c in (-6.6, -2.2, 2.2, 6.6):
+        for x_c in _centers(HALL_X - 4.0, 5.0):
             for z_lvl in (0.35, 1.45):
                 props.append(usd_prop_cfg(prop("SM_RackShelf_01"), (x_c, y_r, z_lvl)))
             for x_e in (x_c - 2.0, x_c + 2.0):
                 props.append(usd_prop_cfg(prop("SM_RackFrame_03"), (x_e, y_r, 0.0)))
             props.append(usd_prop_cfg(prop("SM_RackPile_03"), (x_c - 1.2, y_r, 0.40)))
             props.append(usd_prop_cfg(prop("SM_RackPile_04"), (x_c + 0.9, y_r, 0.42)))
-    # floor goods in front of the racks (outside the +-0.55 delivery
-    # lanes, clear of the shelf line); box origin at its base ->
-    # stacked flush on the 0.21 m pallet
-    props.append(usd_prop_cfg(prop("SM_PaletteA_02"), (6.6, -2.0, 0.0)))
-    props.append(usd_prop_cfg(prop("SM_CardBoxA_01"), (6.6, -2.0, 0.21)))
-    props.append(usd_prop_cfg(prop("SM_CardBoxB_01"), (-6.6, 2.0, 0.0)))
-    props.append(usd_prop_cfg(prop("SM_CratePlastic_A_01"), (-6.6, -2.0, 0.0)))
-    # wall-mounted gear + traffic furniture (cones OUT of the
-    # +-0.55 delivery lanes - at +-0.85 they left ~2 cm to the
-    # base corners and one run ground to a halt against one)
-    props.append(usd_prop_cfg(prop("SM_FuseBox_01"), (HALL_X - 0.05, 1.9, 0.0)))
-    props.append(usd_prop_cfg(prop("S_TrafficCone"), (-0.4, -1.4, 0.0)))
-    props.append(usd_prop_cfg(prop("S_TrafficCone"), (-1.6, 1.4, 0.0)))
+    # traffic furniture OUT of the center corridor (the transit lane
+    # is |y| < 0.8; tables occupy 0.8..1.7) - beside the table rows
+    props.append(usd_prop_cfg(prop("S_TrafficCone"), (-2.5, 2.8, 0.0)))
+    props.append(usd_prop_cfg(prop("S_TrafficCone"), (-6.8, -2.8, 0.0)))
     # S_AisleSign's origin is CENTERED (local z -0.39..0.39) - lift
     # it half its height or it sits half-buried
-    props.append(usd_prop_cfg(prop("S_AisleSign"), (1.2, -1.1, 0.39), rot_z=180.0))
+    props.append(usd_prop_cfg(prop("S_AisleSign"), (-4.5, 3.2, 0.39), rot_z=180.0))
     return props
 
 
 @configclass
 class G1DSceneCfg(InteractiveSceneCfg):
-    """Warehouse aisle: kit props, station, totes, G1D."""
+    """Warehouse hall: kit dressing, 12-table grid, objects, G1D."""
 
     ground = AssetBaseCfg(
         prim_path="/World/GroundPlane",
@@ -161,91 +199,6 @@ class G1DSceneCfg(InteractiveSceneCfg):
         prim_path="/World/Light",
         spawn=sim_utils.DomeLightCfg(intensity=2000.0),
     )
-
-    # --- replenishment station (the pick source) ---
-    station = AssetBaseCfg(
-        prim_path="{ENV_REGEX_NS}/Station",
-        spawn=sim_utils.CuboidCfg(
-            size=(0.5, 0.9, STATION_TOP),
-            collision_props=sim_utils.CollisionPropertiesCfg(),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=STATION_BODY),
-        ),
-        init_state=AssetBaseCfg.InitialStateCfg(
-            pos=(STATION_X, 0.0, STATION_TOP / 2),
-        ),
-    )
-    station_beam = AssetBaseCfg(
-        prim_path="{ENV_REGEX_NS}/StationBeam",
-        spawn=sim_utils.CuboidCfg(
-            size=(0.52, 1.12, 0.04),
-            collision_props=sim_utils.CollisionPropertiesCfg(),
-        ),
-        init_state=AssetBaseCfg.InitialStateCfg(
-            pos=(STATION_X, 0.0, STATION_TOP - 0.02),
-        ),
-    )
-    # cantilevered pick board: the finger pads only reach x ~2.19 and
-    # the station face starts at 2.20, so the totes MUST sit on an
-    # overhang above the AGV nose (classic Mir edge pick point)
-    pick_board = AssetBaseCfg(
-        prim_path="{ENV_REGEX_NS}/PickBoard",
-        spawn=sim_utils.CuboidCfg(
-            size=(0.24, 1.10, 0.04),
-            collision_props=sim_utils.CollisionPropertiesCfg(),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=STATION_BODY),
-        ),
-        init_state=AssetBaseCfg.InitialStateCfg(pos=(2.27, 0.0, 0.75)),
-    )
-    # (retaining pockets REMOVED: single-slot-era walls whose lips
-    # sit in the jaw descent band and sweep totes off the off-center
-    # slots; knock-reset handles nudges now)
-    pad = AssetBaseCfg(
-        prim_path="{ENV_REGEX_NS}/Pad",
-        spawn=sim_utils.CuboidCfg(
-            size=(0.9, 1.4, 0.01),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=PAD_COLOR),
-        ),
-        init_state=AssetBaseCfg.InitialStateCfg(pos=PAD_POS),
-    )
-
-    # presenting posts: each tote sits on a small post, body in
-    # free air ~4 cm above the board - the fingers close on the tote
-    # only (no board contact = no knock/tip/lip chaos). Default
-    # material - no color livery (user: no red in the scene)
-    post_a = AssetBaseCfg(
-        prim_path="{ENV_REGEX_NS}/PostA",
-        spawn=sim_utils.CuboidCfg(size=(0.04, 0.04, 0.035), collision_props=sim_utils.CollisionPropertiesCfg()),
-        init_state=AssetBaseCfg.InitialStateCfg(pos=(2.27, 0.00, 0.7875)),
-    )
-    post_b = AssetBaseCfg(
-        prim_path="{ENV_REGEX_NS}/PostB",
-        spawn=sim_utils.CuboidCfg(size=(0.04, 0.04, 0.035), collision_props=sim_utils.CollisionPropertiesCfg()),
-        init_state=AssetBaseCfg.InitialStateCfg(pos=(2.27, 0.24, 0.7875)),
-    )
-    post_c = AssetBaseCfg(
-        prim_path="{ENV_REGEX_NS}/PostC",
-        spawn=sim_utils.CuboidCfg(size=(0.04, 0.04, 0.035), collision_props=sim_utils.CollisionPropertiesCfg()),
-        init_state=AssetBaseCfg.InitialStateCfg(pos=(2.27, -0.24, 0.7875)),
-    )
-    post_d = AssetBaseCfg(
-        prim_path="{ENV_REGEX_NS}/PostD",
-        spawn=sim_utils.CuboidCfg(size=(0.04, 0.04, 0.035), collision_props=sim_utils.CollisionPropertiesCfg()),
-        init_state=AssetBaseCfg.InitialStateCfg(pos=(2.27, 0.48, 0.7875)),
-    )
-    post_e = AssetBaseCfg(
-        prim_path="{ENV_REGEX_NS}/PostE",
-        spawn=sim_utils.CuboidCfg(size=(0.04, 0.04, 0.035), collision_props=sim_utils.CollisionPropertiesCfg()),
-        init_state=AssetBaseCfg.InitialStateCfg(pos=(2.27, -0.48, 0.7875)),
-    )
-
-    # --- pick targets on the station board ---
-    # every tote spawns ON its station slot (the rack dressing
-    # positions are gone - all five are pick targets now)
-    tote_a = make_tote_cfg("tote_a", (2.27, 0.00, TOTE_Z), PICK_TARGETS[0][3])
-    tote_b = make_tote_cfg("tote_b", (2.27, 0.24, TOTE_Z), PICK_TARGETS[1][3])
-    tote_c = make_tote_cfg("tote_c", (2.27, -0.24, TOTE_Z), PICK_TARGETS[2][3])
-    tote_d = make_tote_cfg("tote_d", (2.27, 0.48, TOTE_Z), PICK_TARGETS[3][3])
-    tote_e = make_tote_cfg("tote_e", (2.27, -0.48, TOTE_Z), PICK_TARGETS[4][3])
 
     robot = ArticulationCfg(
         prim_path="{ENV_REGEX_NS}/Robot",
@@ -274,10 +227,8 @@ class G1DSceneCfg(InteractiveSceneCfg):
                 stiffness=800.0,
                 damping=40.0,
             ),
-            # dedicated WRIST group: under descent contact the wrist
-            # yaw deflected 0.8 rad (jaw rotates 47 deg, tips shift
-            # 24 cm lateral -> every phantom close round). 3x the
-            # stiffness should hold the jaw square on the tote.
+            # dedicated WRIST group: 3x stiffness holds the jaw
+            # square under descent contact
             "wrists": ImplicitActuatorCfg(
                 joint_names_expr=["^(left|right)_wrist_(roll|pitch|yaw)_joint$"],
                 effort_limit_sim=200.0,
@@ -289,7 +240,22 @@ class G1DSceneCfg(InteractiveSceneCfg):
     )
 
 
-# attach the warehouse dressing as numbered fields (configclass turns
-# every class attribute into an entity, so inject them dynamically)
+# the 12 pickable objects on the stocked tables (task order), the
+# tables, and the warehouse dressing attach as numbered fields
+# (configclass turns every class attribute into an entity, so
+# inject them dynamically)
+_si = 0
+for _ti in STOCKED_TABLES:
+    for _slot in (0, 1):
+        setattr(
+            G1DSceneCfg,
+            OBJECT_NAMES[_si],
+            make_object_cfg(OBJECT_NAMES[_si], OBJECT_ORDER[_si], table_slot(_ti, _slot)),
+        )
+        _si += 1
+
+for _i, _cfg in enumerate(build_tables()):
+    setattr(G1DSceneCfg, f"table_{_i:02d}", _cfg)
+
 for _i, _cfg in enumerate(build_warehouse_props()):
     setattr(G1DSceneCfg, f"wh_prop_{_i:02d}", _cfg)

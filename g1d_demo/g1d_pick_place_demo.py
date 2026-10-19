@@ -1,17 +1,16 @@
-"""G1D warehouse pick-and-place demo inside IsaacLab-Arena's Isaac Lab.
+"""G1D warehouse table-to-table pick-and-place demo.
 
-A Mir-style digital-twin warehouse built from the Simple_Warehouse
-asset kit: perimeter walls, pallet racking flanking the aisle, floor
-decals, pallets and card boxes. The wheeled G1D shuttles along the
-aisle and services every tote on the replenishment station in a loop.
+A large warehouse hall (45x30 m) dressed from the Simple_Warehouse
+kit, with TWELVE work tables arranged in the mir_isaacLab divider
+pattern (six divider x positions x two rows flanking a center
+corridor). Half the tables are stocked with a variety of objects
+(plastic crate "basket", four card-box sizes, two totes), half are
+empty delivery targets - 12 pick+place tasks per cycle.
 
-Per user spec, the grasp is a KINEMATIC SNAP (vacuum): the arm rides
-UP from the very start, dips only a little over the slot, and the
-moment the jaw comes near the tote the tote TELEPORTS onto the hand
-and is rigidly written there every step - no physical pinch at all.
-The carry then levels the arm (平举), U-turns 180 deg, walks FORWARD
-to the pad slot, and PLACES the tote physically: detach and let it
-fall. Finally it turns back around and returns for the next tote.
+The grasp is a KINEMATIC SNAP (vacuum): the arm swings out over the
+slot, the object teleports to the palm (each object type grabs at
+its own height - the crate at its HANDLE) and is rigidly carried.
+Delivery drives to the target table and drops the object onto it.
 
 Run inside the compose container with the GUI on the host desktop:
 
@@ -46,26 +45,30 @@ import torch
 
 import carb
 from g1d_config import (
-    ARM_DOCK,
     ARM_GRASP,
     ARM_HIGH,
     ARM_HOVER,
     ARM_LEVEL,
+    CORRIDOR_LANE,
     FINGER_OPEN,
-    PAD_SLOTS,
-    PAD_SPAN,
-    PICK_TARGETS,
-    STANDOFF_CLEAR,
-    TOTE_NAMES,
-    TOTE_Z,
+    OBJECT_CATALOG,
+    OBJECT_NAMES,
+    OBJECT_ORDER,
+    SLOT_RUNWAY,
+    SLOT_STANDOFF,
+    STOCKED_TABLES,
+    TABLE_POS,
+    TABLE_TOP,
+    TOTE_SIZE,
+    table_slot,
 )
 from g1d_driver import G1DDriver, RenderStepper, n, reset_tote
 from g1d_scene import G1DSceneCfg, rotate_props
 from g1d_usd import (
     add_grip_material,
     arm_collision_hand_only,
-    bind_placeholder_materials,
     disable_agv_shell_collision,
+    rigidify_objects,
     select_physx_variant,
     strip_arm_colliders,
 )
@@ -82,6 +85,99 @@ def hold_cmd(driver: G1DDriver, pose, fingers) -> torch.Tensor:
     return cmd
 
 
+def build_tasks():
+    """12 pick+place tasks: every stocked slot -> a round-robin slot
+    on the empty tables (each empty table receives two objects)."""
+    empty = [t for t in range(len(TABLE_POS)) if t not in STOCKED_TABLES]
+    tasks = []
+    k = 0
+    for ti in STOCKED_TABLES:
+        for slot in (0, 1):
+            dst_table = empty[k % len(empty)]
+            dst_slot = (k // len(empty)) % 2
+            tasks.append({
+                "obj": OBJECT_NAMES[k],
+                "type": OBJECT_ORDER[k],
+                "src": table_slot(ti, slot),
+                "dst": table_slot(dst_table, dst_slot),
+            })
+            k += 1
+    return tasks
+
+
+def corridor_transit(driver: G1DDriver, tx: float, lane: float = CORRIDOR_LANE) -> None:
+    """Long transit along the center corridor to x=tx: westbound legs
+    ride forward_line (axis -pi), eastbound legs drive_to. Both home
+    y to the corridor lane; big lateral errors get a short second leg."""
+    bx, by, yaw = driver.pose()
+    if abs(tx - bx) < 0.3:
+        return
+    if tx < bx:
+        driver.spin_to(math.pi, timeout=20.0)
+        driver.forward_line(bx - tx, target_y=lane, speed=0.4, timeout=90.0)
+    else:
+        driver.spin_to(0.0, timeout=20.0)
+        driver.drive_to(tx, target_y=lane, tol=0.10, timeout=90.0)
+
+
+def approach_slot(driver: G1DDriver, sx: float, sy: float, arm_hold=None) -> bool:
+    """Final approach onto a table slot: diagonal from the corridor
+    runway (east of the neighboring table) down onto the in-gap
+    standoff, facing -x. The diagonal stays below the table band
+    until inside the gap - a straight row-line entry would clip the
+    neighboring table's inner corner."""
+    bx, by, yaw = driver.pose()
+    runway_x = sx + SLOT_RUNWAY
+    if bx < runway_x - 0.4 or abs(by) > 0.55:
+        # pre-bias the transit lane toward the target row - the far
+        # row slots otherwise need more lateral than the diagonal
+        # can close even with the long runway
+        corridor_transit(driver, runway_x, lane=CORRIDOR_LANE * (1.0 if sy >= 0 else -1.0))
+    driver.spin_to(math.pi, timeout=20.0)
+    bx, by, _ = driver.pose()
+    # main diagonal stops 0.5 m SHORT of the standoff; one slow
+    # final leg closes both x and y - a fixed creep past the
+    # standoff rammed the tabletop edge (the body is too tall to
+    # nose under it) and wedged the exit spin
+    dist = max(0.2, bx - (sx + SLOT_STANDOFF + 0.5))
+    driver.forward_line(dist, target_y=sy, speed=0.3, arm_hold=arm_hold, timeout=40.0, lat_cap=0.7)
+    driver.forward_line(0.5, target_y=sy, speed=0.12, arm_hold=arm_hold, timeout=20.0, lat_cap=0.7)
+    driver.spin_to(math.pi, timeout=8.0, tol=0.15)
+    # lateral trim retry (the snap radius only tolerates ~0.2 m)
+    for _ in range(1):
+        _, by_now, _ = driver.pose()
+        if abs(by_now - sy) < 0.12:
+            break
+        print(f"  y-trim: {by_now:+.2f} -> {sy:+.2f}", flush=True)
+        bx, _, _ = driver.pose()
+        driver.spin_to(0.0, timeout=10.0)
+        driver.forward_line(max(0.4, (sx + SLOT_RUNWAY) - bx), target_y=CORRIDOR_LANE, speed=0.3, timeout=30.0)
+        driver.spin_to(math.pi, timeout=10.0)
+        driver.forward_line(
+            (sx + SLOT_RUNWAY) - (sx + SLOT_STANDOFF), target_y=sy, speed=0.3, timeout=30.0, lat_cap=0.7
+        )
+        driver.spin_to(math.pi, timeout=8.0, tol=0.15)
+    bx_fin, by_fin, _ = driver.pose()
+    ok_xy = abs(by_fin - sy) < 0.30 and abs(bx_fin - (sx + SLOT_STANDOFF)) < 0.35
+    if not ok_xy:
+        print(f"  approach ends at ({bx_fin:.2f},{by_fin:+.2f}) vs ({sx + SLOT_STANDOFF:.2f},{sy:+.2f})", flush=True)
+    return ok_xy
+
+
+def exit_slot(driver: G1DDriver, arm_hold=None) -> None:
+    """Mirror of the approach: spin in the gap (1.6 m wide, the base
+    sweep is 0.86) and diagonally back out to the corridor lane."""
+    driver.spin_to(0.0, timeout=15.0)
+    driver.forward_line(
+        SLOT_RUNWAY - SLOT_STANDOFF,
+        target_y=CORRIDOR_LANE,
+        speed=0.3,
+        arm_hold=arm_hold,
+        timeout=40.0,
+        lat_cap=0.7,
+    )
+
+
 def main() -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"sim device: {device}", flush=True)
@@ -90,16 +186,16 @@ def main() -> None:
     scene = InteractiveScene(scene_cfg)
 
     rotate_props()
-    bind_placeholder_materials()
     add_grip_material()
     select_physx_variant("/World/envs/env_0/Robot")
+    rigidify_objects()  # kit props ship no RigidBodyAPI on the root
     if not disable_agv_shell_collision():
         carb.log_warn("AGV_link_1 not found - shell collision stays on")
-    # hand colliders OFF by default: the grasp/carry are kinematic
-    # and fingertip hulls fighting the held box at low ride
-    # heights tumbled it and jammed the base
-    n_hand = strip_arm_colliders()
-    print(f"hand colliders stripped: {n_hand}", flush=True)
+    # arm colliders OFF by default: the grasp/carry are kinematic and
+    # fingertip hulls fighting the held box at low ride heights
+    # tumbled it and jammed the base
+    n_arm = strip_arm_colliders()
+    print(f"arm colliders stripped: {n_arm}", flush=True)
     if args_cli.hand_only_collision:
         n_off = arm_collision_hand_only()
         print(f"hand-only collision: {n_off} arm colliders stripped", flush=True)
@@ -108,22 +204,29 @@ def main() -> None:
     print(f"joints: {len(scene['robot'].joint_names)}", flush=True)
 
     stepper = RenderStepper(headless=args_cli.headless)
-    driver = G1DDriver(scene["robot"], sim, totes=[scene[nm] for nm in TOTE_NAMES], step=stepper.step)
+    driver = G1DDriver(scene["robot"], sim, totes=[scene[nm] for nm in OBJECT_NAMES], step=stepper.step)
     x0, y0, yaw0 = driver.pose()
     print(f"root after reset: x={x0:.3f} y={y0:.3f} yaw={yaw0:.3f}", flush=True)
-    for _ in range(120):  # 2 s settle
+    for _ in range(240):  # 4 s settle (objects drop onto their tables)
         stepper.step(sim)
         scene["robot"].update(sim.get_physics_dt())
-        for nm in TOTE_NAMES:
+        for nm in OBJECT_NAMES:
             scene[nm].update(sim.get_physics_dt())
+    # each object's SETTLED center height - used by the per-task
+    # resets (kit prop origins/heights vary, so measure, don't guess)
+    settle_z = {}
+    for nm in OBJECT_NAMES:
+        pz = float(n(scene[nm].data.root_pos_w)[0][2])
+        settle_z[nm] = pz
+        print(f"  {nm} settled z={pz:.3f}", flush=True)
 
     try:
         from isaacsim.core.rendering_manager import ViewportManager
 
         ViewportManager.set_camera_view(
             "/OmniverseKit_Persp",
-            eye=[4.8, 3.6, 2.6],
-            target=[1.2, 0.0, 0.8],
+            eye=[-6.0, 5.0, 3.5],
+            target=[-13.0, 0.0, 0.8],
         )
     except Exception as exc:  # noqa: BLE001
         print(f"camera setup skipped: {exc}", flush=True)
@@ -136,203 +239,121 @@ def main() -> None:
     driver.hold_arm(ARM_HIGH.tolist(), 0.2)
     driver.fingers_to(FINGER_OPEN)
 
+    tasks = build_tasks()
     picks = 0
     placements = 0
     cycle = 0
     while simulation_app.is_running():
         cycle += 1
-        print(f"=== cycle {cycle} ===", flush=True)
+        print(f"=== cycle {cycle}: {len(tasks)} tasks ===", flush=True)
 
-        for name, tx, ty, _color in PICK_TARGETS:
+        for task in tasks:
             t0_steps = stepper.steps
-            tote = scene[name]
-            slot = (tx, ty, TOTE_Z)
-            driver.detach()  # nothing held between totes
-            reset_tote(tote, slot)  # back from the pad / any knock
+            obj = scene[task["obj"]]
+            obj_type = task["type"]
+            grab_up = OBJECT_CATALOG[obj_type][2]
+            sx, sy = task["src"]
+            dx_, dy_ = task["dst"]
+            obj_h = TOTE_SIZE if OBJECT_CATALOG[obj_type][0] is None else 0.45
+
+            driver.detach()  # nothing held between tasks
+            reset_tote(obj, (sx, sy, settle_z[task["obj"]]))
             driver.run_seconds(0.2)
             driver.fingers_to(FINGER_OPEN, tolerance=0.5, timeout=3.0)
 
-            # --- approach: two-phase drive, arm stays raised -----
-            standoff = min(tx - 0.40, STANDOFF_CLEAR)
-            pre_wall = standoff - 0.25
-            # extreme slot-to-slot jumps need up to ~0.9 m of y -
-            # more than one tracker leg can close - so add an early
-            # runway waypoint when far off the slot line
-            _, by_pre, _ = driver.pose()
-            if abs(by_pre - ty) > 0.25:
-                driver.drive_to(pre_wall - 0.90, target_y=ty, tol=0.08, timeout=45.0, lat_cap=0.55)
-            # converge y AT THE PRE-WALL (an angled nose still
-            # clears the station face here), then square up and
-            # creep the last 0.25 m dead-straight - any yaw at the
-            # standoff digs a nose corner into the face
-            if not driver.drive_to(pre_wall, target_y=ty, tol=0.05, lat_cap=0.55):
-                # WEDGE ESCAPE: a failed approach usually means the
-                # base is jammed on pad litter (dropped totes drift
-                # across the return corridor over long runs - seen
-                # wedged at y -0.5 after 18 placements, every later
-                # spin silently timing out). Back off hard, square
-                # up on the centerline, retry the approach once
-                print(f"{name}: pre-wall failed -> wedge escape", flush=True)
-                driver.back_straight(0.80, speed=0.15)
-                driver.spin_to(0.0, timeout=15.0)
-                driver.drive_to(0.5, target_y=0.0, tol=0.08, timeout=30.0)
-                if not driver.drive_to(pre_wall, target_y=ty, tol=0.05, lat_cap=0.55):
-                    print(f"{name}: drive to pre-wall FAILED", flush=True)
-                    continue
-            driver.spin_to(0.0, timeout=8.0)
-            if not driver.drive_to(standoff, target_y=ty, tol=0.03):
-                print(f"{name}: drive to station FAILED", flush=True)
+            # --- approach the source slot --------------------------
+            if not approach_slot(driver, sx, sy):
+                print(f"{task['obj']} ({obj_type}): approach FAILED", flush=True)
+                exit_slot(driver)
                 continue
-            driver.spin_to(0.0, timeout=6.0)
-            # the snap radius covers ~0.20 m of lateral - one
-            # runway retry if y is still wider than that, else
-            # let the tote go to the next cycle
-            for _trim in range(1):
-                _, by_now, _ = driver.pose()
-                if abs(by_now - ty) < 0.18:
-                    break
-                print(f"  y-trim runway: {by_now:+.2f} -> {ty:+.2f}", flush=True)
-                driver.back_straight(0.55, speed=0.12)
-                driver.spin_to(0.0, timeout=8.0)
-                driver.drive_to(pre_wall, target_y=ty, tol=0.05, lat_cap=0.55, timeout=30.0)
-                driver.spin_to(0.0, timeout=8.0)
-                driver.drive_to(standoff, target_y=ty, tol=0.03, timeout=15.0)
-                driver.spin_to(0.0, timeout=6.0)
-            print(f"  t+{(stepper.steps - t0_steps) / 60.0:.0f}s arrived", flush=True)
+            print(f"  t+{(stepper.steps - t0_steps) / 60.0:.0f}s at slot", flush=True)
 
-            # knock recovery: a yawed approach can sweep a tote off
-            # its post (tote_d twice found ~0.4 m away on the
-            # floor) - re-seat it before arming the descent
-            tp_chk = n(tote.data.root_pos_w)[0]
-            if abs(tp_chk[1] - ty) > 0.10 or abs(tp_chk[0] - tx) > 0.12 or abs(tp_chk[2] - TOTE_Z) > 0.05:
-                reset_tote(tote, slot)
+            # knock recovery: the approach can shove an object off
+            # its slot - re-seat it before arming the descent
+            tp_chk = n(obj.data.root_pos_w)[0]
+            if math.hypot(tp_chk[0] - sx, tp_chk[1] - sy) > 0.15 or abs(tp_chk[2] - settle_z[task["obj"]]) > 0.10:
+                reset_tote(obj, (sx, sy, settle_z[task["obj"]]))
+                # TEMP diag: does the write take effect at all?
+                tp_w = n(obj.data.root_pos_w)[0]
+                print(f"  RESET-WRITE readback: ({tp_w[0]:.2f},{tp_w[1]:+.2f},{tp_w[2]:.2f})", flush=True)
                 driver.run_seconds(0.2)
-                print("  (tote re-seated after approach knock)", flush=True)
+                print("  (object re-seated after approach knock)", flush=True)
+                # TEMP trace: does it rest or tip right after the reset?
+                for _tr in range(6):
+                    driver.run_seconds(0.4)
+                    tp_tr = n(obj.data.root_pos_w)[0]
+                    print(f"  TRACE {obj_type}: ({tp_tr[0]:.2f},{tp_tr[1]:+.2f},{tp_tr[2]:.2f})", flush=True)
 
-            # --- REDUCED descent + proximity snap -----------------
-            # swing out OVER the slot, then a small elbow dip - the
-            # snap radius normally fires partway down ARM_DOCK, and
-            # ARM_GRASP is only a drape fallback
+            # --- hover + proximity snap (grab at the object's own
+            # anchor height - the crate grabs its HANDLE) -----------
             driver.move_arm_smooth(ARM_HOVER.tolist(), speed=0.5)
             driver.hold_arm(ARM_HOVER.tolist(), 0.2)
-            driver.arm_capture(tote)
-            # small SHOULDER dips only, and the ramp ABORTS the
-            # instant the snap fires - the arm never presses onto
-            # the tote/post (that press was the pickup jitter)
-            for dip in (ARM_DOCK.tolist(), ARM_GRASP.tolist()):
+            driver.arm_capture(obj, grab_up=grab_up)
+            for dip in (ARM_GRASP.tolist(),):
                 if driver._attach is not None:
                     break
                 driver.move_arm_slow(dip, step=0.05, hold=0.15, abort_attach=True)
             driver.disarm_capture()
             if driver._attach is None:
                 hc = driver.hand_center()
-                tp_f = n(tote.data.root_pos_w)[0]
+                tp_f = n(obj.data.root_pos_w)[0]
                 print(
-                    f"{name}: snap FAILED - skipped "
+                    f"{task['obj']} ({obj_type}): snap FAILED "
                     f"(jaw=({hc[0]:.2f},{hc[1]:+.2f},{hc[2]:.2f}) "
-                    f"tote=({tp_f[0]:.2f},{tp_f[1]:+.2f},{tp_f[2]:.2f}) "
+                    f"obj=({tp_f[0]:.2f},{tp_f[1]:+.2f},{tp_f[2]:.2f}) "
                     f"dist={math.dist(hc.tolist(), tp_f[:3].tolist()):.2f})",
                     flush=True,
                 )
                 driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.6)
+                exit_slot(driver)
                 continue
             picks += 1
-            print(f"  t+{(stepper.steps - t0_steps) / 60.0:.0f}s snapped", flush=True)
-            print(f"  TRACE snap arm={[round(v, 3) for v in driver.right_arm_now()]}", flush=True)
+            print(f"  t+{(stepper.steps - t0_steps) / 60.0:.0f}s snapped {obj_type}", flush=True)
 
-            # --- lift clear, fingers stay OPEN ----------------------
-            # STEP-HOLDS while holding, never per-step ramps: after
-            # the snap the per-step re-targeted ramp (move_arm_smooth)
-            # LOSES authority - the arm sags under gravity the whole
-            # ramp (bisected: sh -0.65 -> -0.33 over 10 s, hand
-            # 0.99 -> 0.73) while a SUSTAINED hold tracks perfectly
-            # (2 s direct hold reached -0.787 of -0.799). Suspected
-            # interplay with the per-step tote root-pose write. That
-            # sag was the "press-down after pickup"
+            # --- lift (STEP-HOLDS while holding, never per-step
+            # ramps: the smooth ramp loses authority once the object
+            # pose write runs every step - see driver notes) --------
             pose = driver.right_arm_now()
             lift = list(pose)
-            lift[0] -= 0.15  # rise ~12 cm before any base motion
+            lift[0] -= 0.15
             driver.move_arm_slow(lift, step=0.05, hold=0.15)
             carry_hold = hold_cmd(driver, lift, FINGER_OPEN.tolist())
 
-            # --- clear the station, U-turn 180 deg ----------------
-            # spinning at the standoff grinds the nose on the
-            # station face - back off first (probe-proven)
-            driver.back_straight(0.35, speed=0.10, arm_hold=carry_hold)
-            ok = driver.spin_to(math.pi, timeout=15.0, tol=0.15)
-            if not ok:
-                driver.back_straight(0.25, speed=0.10, arm_hold=carry_hold)
-                ok = driver.spin_to(math.pi, timeout=15.0, tol=0.15)
-            print(
-                f"  t+{(stepper.steps - t0_steps) / 60.0:.0f}s u-turn (ok={int(ok)} yaw={driver.pose()[2]:+.2f})",
-                flush=True,
-            )
-
-            # --- level the arm (平举) + forward delivery ----------
-            # leveling AFTER the spin: a level arm sweeps the held
-            # tote through the station board / neighboring totes.
-            # Step-holds here too - the smooth ramp sags while the
-            # tote pose write runs every step (see the lift note)
+            # --- exit the gap and level the arm for the carry ------
+            exit_slot(driver, arm_hold=carry_hold)
             driver.move_arm_slow(ARM_LEVEL.tolist(), step=0.08, hold=0.12, timeout=15.0)
             carry_hold = hold_cmd(driver, ARM_LEVEL.tolist(), FINGER_OPEN.tolist())
-            # settle the arm before measuring the box lead - the
-            # level swing changes it mid-motion (0.5 -> 0.67 m and
-            # the stop line overshot by just that delta)
-            driver.run_seconds(
-                0.5,
-                every_step=lambda: (driver.robot.set_joint_position_target(carry_hold)),
-            )
-            slot_px, slot_py = PAD_SLOTS[name]
-            for _leg in range(3):
-                tp = n(tote.data.root_pos_w)[0]
-                d_err = math.hypot(tp[0] - slot_px, tp[1] - slot_py)
-                print(
-                    f"  leg {_leg}: base={driver.pose()[0]:.2f} "
-                    f"box=({tp[0]:.2f},{tp[1]:+.2f},{tp[2]:.2f}) "
-                    f"slot-delta {d_err:.2f}",
-                    flush=True,
-                )
-                if d_err < 0.10:
-                    break
-                bx_p, by_p, byaw_p = driver.pose()
-                if byaw_p > 0.0:  # must face -x for the run
-                    driver.spin_to(math.pi, timeout=8.0, tol=0.25)
-                # reach = box lead ahead of the base (facing -x);
-                # stop the BASE so the HELD box sits over the slot
-                reach = max(0.2, bx_p - tp[0])
-                driver.forward_line(bx_p - (slot_px + reach), target_y=slot_py, speed=0.25, arm_hold=carry_hold)
 
-            # --- physical placement: release and let it fall ------
-            # (tried backing the base off / retracting the arm to
-            # keep the falling box clear of the fingertips - both
-            # caused worse failures: the arm sweep bats the box a
-            # half-metre long, the reverse parks the rear corner on
-            # the fresh drop and jams every later spin. The plain
-            # drop lands 4/5 on-pad; take that)
+            # --- transit + approach the destination slot ----------
+            corridor_transit(driver, dx_ + SLOT_RUNWAY)
+            if not approach_slot(driver, dx_, dy_, arm_hold=carry_hold):
+                print(f"{task['obj']}: delivery approach FAILED - drop in corridor", flush=True)
+                driver.detach()
+                driver.run_seconds(1.0)
+                driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.6)
+                exit_slot(driver)
+                continue
+            print(f"  t+{(stepper.steps - t0_steps) / 60.0:.0f}s at dst", flush=True)
+
+            # --- release over the table: the object drops ~0.3 m
+            # onto the tabletop (arm colliders are stripped, so
+            # nothing clips the fall) ------------------------------
             driver.detach()
             driver.run_seconds(1.0)
-            tp = n(tote.data.root_pos_w)[0]
-            (x_lo, x_hi), (y_lo, y_hi) = PAD_SPAN
-            on_pad = x_lo <= tp[0] <= x_hi and y_lo <= tp[1] <= y_hi
-            placements += int(on_pad)
+            tp = n(obj.data.root_pos_w)[0]
+            on_table = abs(tp[2] - TABLE_TOP - obj_h / 2) < 0.15 and math.hypot(tp[0] - dx_, tp[1] - dy_) < 0.35
+            placements += int(on_table)
             print(
-                f"  t+{(stepper.steps - t0_steps) / 60.0:.0f}s "
-                f"dropped at ({tp[0]:.2f},{tp[1]:+.2f},{tp[2]:.2f}) "
-                f"{'ON PAD' if on_pad else 'off pad!'} "
-                f"(slot {slot_px},{slot_py:+.2f})",
+                f"  t+{(stepper.steps - t0_steps) / 60.0:.0f}s dropped {obj_type} at "
+                f"({tp[0]:.2f},{tp[1]:+.2f},{tp[2]:.2f}) "
+                f"{'ON TABLE' if on_table else 'off!'} (slot {dx_:.2f},{dy_:+.2f})",
                 flush=True,
             )
 
-            # --- open up, turn back, arm up, return ---------------
+            # --- arm up, exit, next task --------------------------
             driver.fingers_to(FINGER_OPEN, tolerance=0.5, timeout=3.0)
             driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.6)
-            driver.spin_to(0.0, timeout=15.0)
-            # CORRIDOR RESET: approaching the next tote straight
-            # from the drop position threads the base between the
-            # freshly dropped totes and it eventually wedges (every
-            # later spin silently times out) - return to the aisle
-            # centerline first, then approach with a clean runway
-            driver.drive_to(0.5, target_y=0.0, spin_first=False, tol=0.06, timeout=40.0)
+            exit_slot(driver)
 
         print(f"=== cycle {cycle}: {placements} placed / {picks} picked ===", flush=True)
 

@@ -3,7 +3,7 @@
 import os
 
 import omni.usd
-from g1d_config import TOTE_NAMES, WAREHOUSE
+from g1d_config import OBJECT_CATALOG, OBJECT_NAMES, OBJECT_ORDER, WAREHOUSE
 
 
 def select_physx_variant(robot_prim_path: str) -> None:
@@ -13,6 +13,81 @@ def select_physx_variant(robot_prim_path: str) -> None:
     if variant.GetVariantNames():
         variant.SetVariantSelection("physx")
         print("physics variant: physx selected", flush=True)
+
+
+def rigidify_objects(env_ns: str = "/World/envs/env_0") -> int:
+    """Make the kit-prop objects proper rigid bodies.
+
+    The props ship collision meshes but NO rigid body on the root
+    (RigidObjectCfg cannot resolve them), and their mesh/convex-hull
+    colliders are tippy - the crate tipped over on every re-seat and
+    slid off the table. So per kit object: RigidBodyAPI + explicit
+    mass on the root, the stock mesh colliders DISABLED, and a
+    bbox-sized guide Cube child carrying a clean BOX CollisionAPI -
+    flat, stable, predictable. Run between scene creation and
+    sim.reset(), same window as select_physx_variant(). (A raw
+    "physics:approximation" write broke the collider parse entirely
+    - the objects fell through the floor to z -42000.)
+    """
+    from pxr import Gf, Usd, UsdGeom
+    from pxr import UsdPhysics as Phys
+
+    stage = omni.usd.get_context().get_stage()
+    cache = UsdGeom.BBoxCache(Usd.TimeCode.Default(), [UsdGeom.Tokens.default_], False)
+    n = 0
+    for nm in OBJECT_NAMES:
+        root = stage.GetPrimAtPath(f"{env_ns}/{nm}")
+        if not root:
+            print(f"rigidify: no prim at {env_ns}/{nm}", flush=True)
+            continue
+        if not root.HasAPI(Phys.RigidBodyAPI):
+            Phys.RigidBodyAPI.Apply(root)
+        # de-instance: UsdFileCfg spawns kit props as INSTANCED
+        # references ("/World/template/obj_xx/proto_asset_0"), and
+        # write_root_pose_to_sim on an instanced body silently does
+        # nothing - the re-seat teleports never took effect. A
+        # private prim stack makes every runtime write work
+        root.SetInstanceable(False)
+        usd_path, _color, _grab, mass = OBJECT_CATALOG[_obj_type(nm)]
+        if usd_path is None:  # cuboid totes already collide fine
+            n += 1
+            continue
+        Phys.MassAPI.Apply(root)
+        Phys.MassAPI(root).CreateMassAttr(mass)
+        # disable every stock mesh collider under the object, and
+        # measure the visual bbox for the box collider size/offset
+        for p in stage.Traverse():
+            path = str(p.GetPath())
+            if path.startswith(f"{env_ns}/{nm}/") and p.HasAPI(Phys.CollisionAPI):
+                Phys.CollisionAPI(p).CreateCollisionEnabledAttr(False)
+        root_xo = UsdGeom.Xformable(root)
+        root_t = Gf.Vec3d(0.0)
+        t_op = root_xo.GetTranslateOp()
+        if t_op:
+            root_t = Gf.Vec3d(t_op.Get())
+        rng = cache.ComputeWorldBound(root).ComputeAlignedRange()
+        size = rng.GetSize()
+        mid = rng.GetMidpoint() - root_t  # bbox center in root space
+        cube = UsdGeom.Cube.Define(stage, f"{env_ns}/{nm}/BoxCol")
+        cube.CreateSizeAttr(1.0)
+        cube_xo = UsdGeom.Xformable(cube.GetPrim())
+        cube_xo.AddTranslateOp().Set(Gf.Vec3d(mid))
+        cube_xo.AddScaleOp().Set(Gf.Vec3f(size[0], size[1], size[2]))
+        # INVISIBLE, not "guide" purpose: guide prims are SKIPPED by
+        # the physics parser - the collider never existed and the
+        # objects fell through the tabletop onto the legs below
+        cube.CreateVisibilityAttr("invisible")
+        Phys.CollisionAPI.Apply(cube.GetPrim())
+        print(f"  {nm} box col {size[0]:.2f}x{size[1]:.2f}x{size[2]:.2f} @{mid}", flush=True)
+        n += 1
+        n += 1
+    print(f"rigidified {n} objects", flush=True)
+    return n
+
+
+def _obj_type(obj_name: str) -> str:
+    """Catalog type of a spawned object prim name."""
+    return OBJECT_ORDER[OBJECT_NAMES.index(obj_name)]
 
 
 def strip_arm_colliders() -> int:
@@ -100,7 +175,7 @@ def bind_placeholder_materials(env_ns="/World/envs/env_0"):
     same everywhere (every functional cuboid in the scene uses it).
     Textures: g1d_make_textures.py output.
     """
-    from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade
+    from pxr import Sdf, UsdShade
 
     tex = os.path.join(WAREHOUSE, "Materials", "Textures")
 
@@ -165,7 +240,7 @@ def add_grip_material(env_ns="/World/envs/env_0") -> None:
     bound = 0
     for prim in stage.Traverse():
         nm = prim.GetName()
-        bind = nm in TOTE_NAMES or (
+        bind = nm in OBJECT_NAMES or (
             nm in ("right_hand_thumb_2_link_1", "right_hand_middle_1_link_1", "right_hand_index_1_link_1")
         )
         if bind:

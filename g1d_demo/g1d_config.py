@@ -105,52 +105,95 @@ SNAP_SHIFT_UP = 0.10
 SNAP_SHIFT_LEFT = 0.072
 SNAP_SHIFT_BACK = 0.108
 
-# --- aisle layout ------------------------------------------------------
-STATION_X = 2.45  # replenishment station center (near edge 2.20)
-STATION_TOP = 0.80
-PAD_POS = (-1.0, 0.0, 0.005)
-TOTE_SIZE = 0.12  # fills the 11.7 cm thumb-to-middle gap at wrist -0.5
-TOTE_Z = 0.805 + TOTE_SIZE / 2 + 0.005  # post top + half tote
-# (posts lift the totes 4 cm into free air: fingers close on
-# the tote body only - no board-contact grasp chaos)
-STANDOFF_CLEAR = 1.84  # physics wall: AGV nose hits the 2.20 edge
 
 # --- hall footprint ----------------------------------------------------
-# 2x the original 9x6.4 room = 18x12 m. The whole enclosure (wall
-# runs, floor tiles, rack rows) derives from these; the wall runs
-# assert on spans that are not a multiple of the 3 m panel, so a
-# HALL_SCALE of 3.0 (27x18) tiles cleanly too - anything else needs
-# the assert revisited. Robot workflow coords do NOT scale (station,
-# pad, slots all stay put - they are probe-calibrated).
-HALL_SCALE = 2.0
-HALL_X = 4.5 * HALL_SCALE  # end-wall lines at +-HALL_X; side runs span them
-HALL_Y = 3.0 * HALL_SCALE  # side-wall lines at +-HALL_Y; end runs span them
-RACK_Y = 2.4 * HALL_SCALE  # rack rows flanking the aisle
+# The whole enclosure (wall runs, floor tiles, rack rows) derives
+# from these; the wall runs assert on spans that are not a multiple
+# of the 3 m panel, so whole/half HALL_SCALE values tile cleanly.
+# 5.0 (45x30 m) fits the 12-table grid whose farthest divider sits
+# at x -19.5 (table edge -20.4 < wall -22.5).
+HALL_SCALE = 5.0
+HALL_X = 4.8 * HALL_SCALE  # +-24: 48 m span tiles in 6/4/5/3 m runs
+HALL_Y = 3.0 * HALL_SCALE  # +-15: 30 m span tiles in 6/3 m runs
+RACK_Y = 2.4 * HALL_SCALE  # rack rows in the far north/south bands
 
-# FIVE pick slots across the 0.9 m board (y +-0.45): every cycle
-# services all five totes in sequence - multiple picks per visit.
-# (no red/orange anywhere: the beam + posts render their DEFAULT
-# material, and tote_a stays clear of the old livery orange)
-PICK_TARGETS = (
-    ("tote_a", 2.27, 0.00, (0.95, 0.80, 0.20)),
-    ("tote_b", 2.27, 0.24, (0.1, 0.6, 0.9)),
-    ("tote_c", 2.27, -0.24, (0.2, 0.8, 0.3)),
-    ("tote_d", 2.27, 0.48, (0.8, 0.2, 0.6)),
-    ("tote_e", 2.27, -0.48, (0.3, 0.7, 0.8)),
-)
-TOTE_NAMES = tuple(e[0] for e in PICK_TARGETS)
+# --- 12-table grid (mir_isaacLab divider pattern) ----------------------
+# divider_x straight from the mir layout; its 2.5 m row separation
+# is WIDENED to 4.0 m (rows at +-2.0) because our base is wider
+# than mir's: with 0.9 m-deep tables the 2.5 m rows left a 0.7 m
+# center corridor - the 0.56 m base could not even spin (0.86 m
+# sweep) and every transit stalled nose-on into a table. At 4.0 m
+# the corridor is 2.2 m and the robot has a +-0.8 m lane.
+DIVIDER_X = (-8.5, -11.0, -13.75, -15.25, -18.0, -19.5)
+ROW_DY = 2.0
+TABLE_POS = tuple((float(x), float(dy)) for x in DIVIDER_X for dy in (-ROW_DY, ROW_DY))
+TABLE_TOP = 0.78  # working surface height (arm poses calibrated ~0.78)
+TABLE_SIZE = (0.9, 1.8, 0.06)  # LONG AXIS Y: east face is narrow, the
+# same-row gaps between tables are then 2.5-0.9 = 1.6 m wide and the
+# base can stand/spin in them
+# two slots per table, fully ON the tabletop near the east edge:
+# (dx, dy) from table center. dx 0.15 keeps every object supported
+# (the 0.42 edge slots tipped objects off onto the floor); the base
+# parks with its nose between the table legs UNDER the top and the
+# jaw (~0.48 ahead) lands exactly on the slot line
+SLOT_DXY = ((0.15, 0.40), (0.15, -0.40))
+SLOT_STANDOFF = 0.65  # base parks this far EAST of the slot x: the
+# nose (0.30 half-length) stays CLEAR of the tabletop edge (slot
+# dx 0.15 + table edge 0.45 -> 0.20 m margin) - the G1D body is
+# too tall to poke under the top like an AGV (the 0.48 standoff
+# rammed the slab edge and shoved objects off)
+# diagonal entry/exit runway: approach legs START this far east of
+# the slot. 4.2 (not 3.1): the FAR-row slots (|y| 2.4) need up to
+# 2.7 m of lateral from the center lane - at the 0.7 rad correction
+# cap that needs >3.2 m of runway plus the standoff approach
+SLOT_RUNWAY = 4.2
+CORRIDOR_LANE = 0.3  # transit lane |y| (corridor floor is |y| < 0.8)
+# half the tables stocked, the other half are delivery targets
+# -> 12 pick+place tasks per cycle
+STOCKED_TABLES = (0, 2, 4, 6, 8, 10)
+TOTE_SIZE = 0.12  # cuboid tote edge
 
-# delivered totes are tidied onto these pad slots by the physical
-# drop - the delivery aims the HELD box at the slot, so they sit
-# outside the base's swept path on the return leg
-PAD_SLOTS = {
-    "tote_a": (-0.90, 0.55),
-    "tote_b": (-1.10, 0.55),
-    "tote_c": (-1.00, -0.55),
-    "tote_d": (-1.20, -0.55),
-    "tote_e": (-0.80, -0.55),
+
+def table_slot(table_idx: int, slot_idx: int):
+    """World (x, y) of a slot on table `table_idx`."""
+    tx, ty = TABLE_POS[table_idx]
+    dx, dy = SLOT_DXY[slot_idx]
+    return (tx + dx, ty + dy)
+
+
+# --- object catalog ----------------------------------------------------
+# name -> (usd path or None for a cuboid tote, tote color, GRAB_UP,
+# mass kg). GRAB_UP = how far above the SEED point the palm grabs:
+# for the crate it is the HANDLE (the basket hangs below the palm),
+# for card boxes roughly the box top, for totes the tuned value.
+
+
+def _prop(name):
+    return os.path.join(WAREHOUSE, "Props", name + ".usd")
+
+
+OBJECT_CATALOG = {
+    "crate": (_prop("SM_CratePlastic_A_01"), None, 0.34, 0.5),
+    "card_a": (_prop("SM_CardBoxA_01"), None, 0.22, 0.4),
+    "card_b": (_prop("SM_CardBoxB_01"), None, 0.18, 0.3),
+    "card_c": (_prop("SM_CardBoxC_01"), None, 0.26, 0.5),
+    "card_d": (_prop("SM_CardBoxD_01"), None, 0.30, 0.6),
+    "tote_y": (None, (0.95, 0.80, 0.20), 0.10, 0.15),
+    "tote_g": (None, (0.2, 0.8, 0.3), 0.10, 0.15),
 }
-PAD_SPAN = ((-1.45, -0.55), (-0.70, 0.70))  # pad x/y extents
-
-STATION_BODY = (0.55, 0.5, 0.42)  # wood-tone cabinet
-PAD_COLOR = (0.1, 0.35, 0.8)
+# which object sits on each of the 12 stocked slots (in task order)
+OBJECT_ORDER = (
+    "crate",
+    "card_a",
+    "tote_y",
+    "card_b",
+    "card_c",
+    "tote_g",
+    "card_d",
+    "crate",
+    "card_a",
+    "card_b",
+    "tote_y",
+    "card_c",
+)
+OBJECT_NAMES = tuple(f"obj_{i:02d}" for i in range(len(OBJECT_ORDER)))
