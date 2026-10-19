@@ -1,0 +1,150 @@
+#usda 1.0
+(
+    subLayers = [
+        @../material.usda@
+    ]
+)
+
+def Xform "root"
+{
+    def Xform "E_body_1" (
+    )
+    {
+        matrix4d xformOp:transform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+
+        def Mesh "P_d0fd959546acea04" (
+            prepend apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "MaterialBindingAPI"]
+        )
+        {
+            uniform bool doubleSided = 1
+            float3[] extent = [(-0.2603, -0.2566, 0), (0.27, 0.2737, 0.5304)]
+            int[] faceVertexCounts = [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
+            int[] faceVertexIndices = [0, 1, 2, 1, 0, 3, 4, 5, 6, 5, 4, 7, 8, 9, 10, 9, 8, 11, 11, 8, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 20, 19, 22, 22, 19, 23, 24, 25, 26, 25, 24, 27, 28, 29, 30, 29, 28, 31]
+            rel material:binding = </root/materials/mat_53>
+            normal3f[] normals = [(-1, 0, 0), (-1, 0, 0), (-1, 0, 0), (-1, 0, 0), (-1, 0, 0), (-1, 0, 0), (-1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, 1, 0), (0, 1, 0), (0, 1, 0), (0, 1, 0), (0, 1, 0), (0, 1, 0), (0, 1, 0), (0, -1, 0), (0, -1, 0), (0, -1, 0), (0, -1, 0), (0, -1, 0), (0, -1, 0), (0, -1, 0), (0, -1, 0), (0, 0, -1), (0, 0, -1), (0, 0, -1), (0, 0, -1), (1, 0, 0), (1, 0, 0), (1, 0, 0), (1, 0, 0)]
+            custom token normals:interpolation = "uniform"
+            custom token physics:approximation = "convexDecomposition"
+            bool physics:collisionEnabled = 1
+            point3f[] points = [(-0.2603, 0.2737, 0.5301), (-0.2603, -0.2566, 0), (-0.2603, -0.2566, 0.5301), (-0.2603, 0.2737, 0), (-0.2603, 0.2737, 0.5304), (-0.2603, -0.2566, 0.5301), (-0.2603, -0.2566, 0.5304), (-0.2603, 0.2737, 0.5301), (-0.2603, 0.2737, 0.5301), (0.27, 0.2737, 0), (-0.2603, 0.2737, 0), (0.27, 0.2737, 0.5304), (-0.1426, 0.2737, 0.5304), (-0.1426, 0.2737, 0.5304), (-0.2603, 0.2737, 0.5301), (-0.2603, 0.2737, 0.5304), (-0.2603, -0.2566, 0.5304), (-0.2603, -0.2566, 0.5301), (-0.1426, -0.2566, 0.5304), (0.27, -0.2566, 0.5304), (-0.2603, -0.2566, 0), (0.27, -0.2566, 0), (-0.2603, -0.2566, 0.5301), (-0.1426, -0.2566, 0.5304), (0.27, 0.2737, 0), (-0.2603, -0.2566, 0), (-0.2603, 0.2737, 0), (0.27, -0.2566, 0), (0.27, 0.2737, 0), (0.27, -0.2566, 0.5304), (0.27, -0.2566, 0), (0.27, 0.2737, 0.5304)]
+            bool primvars:doNotCastShadows = 0
+            texCoord2f[] primvars:st = [(-0.2737145, 0.5301477), (0.25663748, 0.00001085), (0.25663748, 0.5301477), (-0.2737145, 0.00001085), (-0.2737145, 0.53036284), (0.25663748, 0.5301477), (0.25663748, 0.53036284), (-0.2737145, 0.5301477), (0.26034886, 0.5301477), (-0.27000314, 0.00001085), (0.26034886, 0.00001085), (-0.27000314, 0.53036284), (0.14259018, 0.53036284), (0.14259018, 0.53036284), (0.26034886, 0.5301477), (0.26034886, 0.53036284), (-0.26034886, 0.53036284), (-0.26034886, 0.5301477), (-0.14259018, 0.53036284), (0.27000314, 0.53036284), (-0.26034886, 0.00001085), (0.27000314, 0.00001085), (-0.26034886, 0.5301477), (-0.14259018, 0.53036284), (-0.27000314, 0.2737145), (0.26034886, -0.25663748), (0.26034886, 0.2737145), (-0.27000314, -0.25663748), (0.2737145, 0.00001085), (-0.25663748, 0.53036284), (-0.25663748, 0.00001085), (0.2737145, 0.53036284)] (
+                interpolation = "varying"
+            )
+            uniform token subdivisionScheme = "none"
+        }
+    }
+
+    def Xform "E_leaves_1_2" (
+    )
+    {
+        matrix4d xformOp:transform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0.0007547, 0.2734242, 0.5303345, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+
+        def Mesh "P_ed081608dc2cd69f" (
+            prepend apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "MaterialBindingAPI"]
+        )
+        {
+            uniform bool doubleSided = 1
+            float3[] extent = [(-0.2614, 0.0003, -0.0002), (0.2692, 0.1878, 0.1883)]
+            int[] faceVertexCounts = [3, 3, 3]
+            int[] faceVertexIndices = [0, 1, 2, 1, 0, 3, 3, 0, 4]
+            rel material:binding = </root/materials/mat_53>
+            normal3f[] normals = [(0, 0.70710677, -0.70710677), (0, 0.70710677, -0.70710677), (0, 0.70710677, -0.70710677), (0, 0.70710677, -0.70710677), (0, 0.70710677, -0.70710677)]
+            custom token normals:interpolation = "uniform"
+            custom token physics:approximation = "convexDecomposition"
+            bool physics:collisionEnabled = 1
+            point3f[] points = [(-0.2614, 0.1878, 0.1873), (-0.1433, 0.0003, 0), (-0.2611, 0.0003, -0.0002), (0.2692, 0.0003, 0.0008), (0.2689, 0.1878, 0.1883)]
+            bool primvars:doNotCastShadows = 0
+            texCoord2f[] primvars:st = [(0.26153392, 0.83325505), (0.14309013, 0.5683843), (0.2608486, 0.56807995), (-0.2695025, 0.56945056), (-0.2688172, 0.83462566)] (
+                interpolation = "varying"
+            )
+            uniform token subdivisionScheme = "none"
+        }
+    }
+
+    def Xform "E_leaves_2_3" (
+    )
+    {
+        matrix4d xformOp:transform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (-0.2601559, -0.0000704, 0.5299547, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+
+        def Mesh "P_8b5601f875eae9f" (
+            prepend apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "MaterialBindingAPI"]
+        )
+        {
+            uniform bool doubleSided = 1
+            float3[] extent = [(-0.1877, -0.2566, 0.0002), (-0.0002, 0.2738, 0.1877)]
+            int[] faceVertexCounts = [3, 3]
+            int[] faceVertexIndices = [0, 1, 2, 1, 0, 3]
+            rel material:binding = </root/materials/mat_53>
+            normal3f[] normals = [(-0.70710677, 0, -0.70710677), (-0.70710677, 0, -0.70710677), (-0.70710677, 0, -0.70710677), (-0.70710677, 0, -0.70710677)]
+            custom token normals:interpolation = "uniform"
+            custom token physics:approximation = "convexDecomposition"
+            bool physics:collisionEnabled = 1
+            point3f[] points = [(-0.1877, 0.2738, 0.1877), (-0.0002, -0.2566, 0.0002), (-0.1877, -0.2566, 0.1877), (-0.0002, 0.2738, 0.0002)]
+            bool primvars:doNotCastShadows = 0
+            texCoord2f[] primvars:st = [(-0.2737145, 0.82414144), (0.25663748, 0.55896544), (0.25663748, 0.82414144), (-0.2737145, 0.55896544)] (
+                interpolation = "varying"
+            )
+            uniform token subdivisionScheme = "none"
+        }
+    }
+
+    def Xform "E_leaves_3_4" (
+    )
+    {
+        matrix4d xformOp:transform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0.2700547, -0.0009094, 0.5311684, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+
+        def Mesh "P_2b66a1e65cecd69f" (
+            prepend apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "MaterialBindingAPI"]
+        )
+        {
+            uniform bool doubleSided = 1
+            float3[] extent = [(-0.0001, -0.2557, -0.0001), (0.1875, 0.2746, 0.1875)]
+            int[] faceVertexCounts = [3, 3]
+            int[] faceVertexIndices = [0, 1, 2, 1, 0, 3]
+            rel material:binding = </root/materials/mat_53>
+            normal3f[] normals = [(0.70710677, 0, -0.70710677), (0.70710677, 0, -0.70710677), (0.70710677, 0, -0.70710677), (0.70710677, 0, -0.70710677)]
+            custom token normals:interpolation = "uniform"
+            custom token physics:approximation = "convexDecomposition"
+            bool physics:collisionEnabled = 1
+            point3f[] points = [(-0.0001, 0.2746, -0.0001), (0.1875, -0.2557, 0.1875), (-0.0001, -0.2557, -0.0001), (0.1875, 0.2746, 0.1875)]
+            bool primvars:doNotCastShadows = 0
+            texCoord2f[] primvars:st = [(0.2737145, 0.56647736), (-0.25663748, 0.83165336), (-0.25663748, 0.56647736), (0.2737145, 0.83165336)] (
+                interpolation = "varying"
+            )
+            uniform token subdivisionScheme = "none"
+        }
+    }
+
+    def Xform "E_leaves_4_5" (
+    )
+    {
+        matrix4d xformOp:transform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0.0006574, -0.2564104, 0.5303975, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+
+        def Mesh "P_e5f7bc653248d69f" (
+            prepend apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "MaterialBindingAPI"]
+        )
+        {
+            uniform bool doubleSided = 1
+            float3[] extent = [(-0.2613, -0.1877, -0.0002), (0.2693, -0.0002, 0.1882)]
+            int[] faceVertexCounts = [3, 3, 3]
+            int[] faceVertexIndices = [0, 1, 2, 1, 0, 3, 1, 3, 4]
+            rel material:binding = </root/materials/mat_53>
+            normal3f[] normals = [(0, -0.70710677, -0.70710677), (0, -0.70710677, -0.70710677), (0, -0.70710677, -0.70710677), (0, -0.70710677, -0.70710677), (0, -0.70710677, -0.70710677)]
+            custom token normals:interpolation = "uniform"
+            custom token physics:approximation = "convexDecomposition"
+            bool physics:collisionEnabled = 1
+            point3f[] points = [(-0.1432, -0.0002, 0), (-0.2613, -0.1877, 0.1873), (-0.261, -0.0002, -0.0002), (0.2693, -0.0002, 0.0007), (0.269, -0.1877, 0.1882)]
+            bool primvars:doNotCastShadows = 0
+            texCoord2f[] primvars:st = [(-0.14305893, 0.55630904), (-0.2615027, 0.8211798), (-0.2608174, 0.5560047), (0.2695337, 0.5573753), (0.2688484, 0.8225504)] (
+                interpolation = "varying"
+            )
+            uniform token subdivisionScheme = "none"
+        }
+    }
+}
+

@@ -1,0 +1,260 @@
+#usda 1.0
+(
+    customLayerData = {
+        dictionary cameraSettings = {
+            dictionary Front = {
+                double3 position = (5, 0, 0)
+                double radius = 5
+            }
+            dictionary Perspective = {
+                double3 position = (-1.385514600490615, 2.1802845611875017, 2.8824057318128737)
+                double3 target = (-0.0481386695221635, 0.1290339363580908, 0.4361249191781864)
+            }
+            dictionary Right = {
+                double3 position = (0, -5, 0)
+                double radius = 5
+            }
+            dictionary Top = {
+                double3 position = (0, 0, 5)
+                double radius = 5
+            }
+            string boundCamera = "/OmniverseKit_Persp"
+        }
+        dictionary omni_layer = {
+            string authoring_layer = "./model_carton_1.usda"
+        }
+        dictionary renderSettings = {
+            double "rtx:translucency:worldEps" = 0.05
+        }
+    }
+    defaultPrim = "root"
+    metersPerUnit = 1
+    subLayers = [
+        @./resource/material.usda@,
+        @./resource/v_0/link_default_0.usda@
+    ]
+    upAxis = "Z"
+)
+
+over "root" (
+    apiSchemas = ["SemanticsLabelsAPI:class"]
+    kind = "component"
+)
+{
+    token[] semantics:labels:class = ["cardboard_box"]
+
+    over "E_body_1" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysxRigidBodyAPI", "PhysicsArticulationRootAPI", "PhysxArticulationAPI"]
+    )
+    {
+        bool physics:kinematicEnabled = 0
+        bool physics:rigidBodyEnabled = 1
+
+        def PhysicsFixedJoint "FixedJoint"
+        {
+            rel physics:body1 = </root/E_body_1>
+            float physics:breakForce = inf
+            float physics:breakTorque = inf
+            point3f physics:localPos0 = (0, 0, 0)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (1, 0, 0, 0)
+            quatf physics:localRot1 = (1, 0, 0, 0)
+        }
+
+        over "P_d0fd959546acea04" (
+            delete apiSchemas = ["MaterialBindingAPI"]
+            prepend apiSchemas = ["PhysicsMeshCollisionAPI", "PhysxSDFMeshCollisionAPI"]
+        )
+        {
+            uniform token physics:approximation = "sdf"
+        }
+    }
+
+    over "E_leaves_1_2" (
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysxRigidBodyAPI", "SemanticsLabelsAPI:class"]
+    )
+    {
+        bool physics:kinematicEnabled = 0
+        bool physics:rigidBodyEnabled = 1
+        token[] semantics:labels:class = ["flap"]
+        token visibility = "inherited"
+
+        over "P_ed081608dc2cd69f" (
+            delete apiSchemas = ["MaterialBindingAPI"]
+            prepend apiSchemas = ["PhysicsMeshCollisionAPI", "PhysxSDFMeshCollisionAPI"]
+        )
+        {
+            uniform token physics:approximation = "sdf"
+            bool physics:collisionEnabled = 1
+            quatf xformOp:orient = (0.40902427, 0.9125235, 0, 0)
+            float3 xformOp:scale = (1, 1, 1)
+            double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+        }
+
+        def PhysicsRevoluteJoint "RevoluteJoint_carton_1_up" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
+        {
+            float drive:angular:physics:damping = 10
+            float drive:angular:physics:stiffness = 10
+            float drive:angular:physics:targetPosition = -120
+            uniform token drive:angular:physics:type = "acceleration"
+            uniform token physics:axis = "X"
+            rel physics:body0 = </root/E_body_1>
+            rel physics:body1 = </root/E_leaves_1_2>
+            float physics:breakForce = inf
+            float physics:breakTorque = inf
+            point3f physics:localPos0 = (0.0007547, 0.2734242, 0.5303345)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (1, 0, 0, 0)
+            quatf physics:localRot1 = (1, 0, 0, 0)
+            float physics:lowerLimit = -120
+            float physics:upperLimit = 0
+        }
+    }
+
+    over "E_leaves_2_3" (
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysxRigidBodyAPI", "SemanticsLabelsAPI:class"]
+    )
+    {
+        bool physics:kinematicEnabled = 0
+        bool physics:rigidBodyEnabled = 1
+        token[] semantics:labels:class = ["flap"]
+
+        over "P_8b5601f875eae9f" (
+            delete apiSchemas = ["MaterialBindingAPI"]
+            prepend apiSchemas = ["PhysicsMeshCollisionAPI", "PhysxSDFMeshCollisionAPI"]
+        )
+        {
+            uniform token physics:approximation = "sdf"
+            bool physics:collisionEnabled = 1
+            quatf xformOp:orient = (0.32645583, 3.7887916e-17, 0.9452125, 4.1242686e-17)
+            float3 xformOp:scale = (1, 0.94977194, 1)
+            double3 xformOp:translate = (-3.6637359812630166e-15, -0.00004214132666461654, 2.220446049250313e-16)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+        }
+
+        def PhysicsRevoluteJoint "RevoluteJoint_carton_1_left" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
+        {
+            float drive:angular:physics:damping = 110
+            float drive:angular:physics:stiffness = 10
+            float drive:angular:physics:targetPosition = -120
+            uniform token drive:angular:physics:type = "acceleration"
+            uniform token physics:axis = "Y"
+            rel physics:body0 = </root/E_body_1>
+            rel physics:body1 = </root/E_leaves_2_3>
+            float physics:breakForce = inf
+            float physics:breakTorque = inf
+            point3f physics:localPos0 = (-0.2601559, -0.0000704, 0.5299547)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (1, 0, 0, 0)
+            quatf physics:localRot1 = (1, 0, 0, 0)
+            float physics:lowerLimit = -120
+            float physics:upperLimit = 0
+        }
+    }
+
+    over "E_leaves_3_4" (
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysxRigidBodyAPI", "SemanticsLabelsAPI:class"]
+    )
+    {
+        bool physics:kinematicEnabled = 0
+        bool physics:rigidBodyEnabled = 1
+        token[] semantics:labels:class = ["flap"]
+
+        over "P_2b66a1e65cecd69f" (
+            delete apiSchemas = ["MaterialBindingAPI"]
+            prepend apiSchemas = ["PhysicsMeshCollisionAPI", "PhysxSDFMeshCollisionAPI"]
+        )
+        {
+            uniform token physics:approximation = "sdf"
+            bool physics:collisionEnabled = 1
+            quatf xformOp:orient = (-0.36109903, 7.9211775e-17, 0.9325275, 8.334328e-17)
+            float3 xformOp:scale = (1, 0.94977194, 1)
+            double3 xformOp:translate = (-1.1102230246251565e-16, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+        }
+
+        def PhysicsRevoluteJoint "RevoluteJoint_carton_1_right" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
+        {
+            float drive:angular:physics:damping = 110
+            float drive:angular:physics:stiffness = 10
+            float drive:angular:physics:targetPosition = 120
+            uniform token drive:angular:physics:type = "acceleration"
+            uniform token physics:axis = "Y"
+            rel physics:body0 = </root/E_body_1>
+            rel physics:body1 = </root/E_leaves_3_4>
+            float physics:breakForce = inf
+            float physics:breakTorque = inf
+            point3f physics:localPos0 = (0.2700547, -0.0009094, 0.5311684)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (1, 0, 0, 0)
+            quatf physics:localRot1 = (1, 0, 0, 0)
+            float physics:lowerLimit = 0
+            float physics:upperLimit = 120
+        }
+    }
+
+    over "E_leaves_4_5" (
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysxRigidBodyAPI", "SemanticsLabelsAPI:class"]
+    )
+    {
+        bool physics:kinematicEnabled = 0
+        bool physics:rigidBodyEnabled = 1
+        token[] semantics:labels:class = ["flap"]
+
+        over "P_e5f7bc653248d69f" (
+            delete apiSchemas = ["MaterialBindingAPI"]
+            prepend apiSchemas = ["PhysicsMeshCollisionAPI", "PhysxSDFMeshCollisionAPI"]
+        )
+        {
+            uniform token physics:approximation = "sdf"
+            bool physics:collisionEnabled = 1
+            token visibility = "inherited"
+            quatf xformOp:orient = (0.42469513, -0.90533644, 0, 0)
+            float3 xformOp:scale = (1, 1, 1)
+            double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+        }
+
+        def PhysicsRevoluteJoint "RevoluteJoint_carton_1_down" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
+        {
+            float drive:angular:physics:damping = 10
+            float drive:angular:physics:stiffness = 10
+            float drive:angular:physics:targetPosition = 120
+            uniform token drive:angular:physics:type = "acceleration"
+            uniform token physics:axis = "X"
+            rel physics:body0 = </root/E_body_1>
+            rel physics:body1 = </root/E_leaves_4_5>
+            float physics:breakForce = inf
+            float physics:breakTorque = inf
+            point3f physics:localPos0 = (0.0006574, -0.2564104, 0.5303975)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (1, 0, 0, 0)
+            quatf physics:localRot1 = (1, 0, 0, 0)
+            float physics:lowerLimit = 0
+            float physics:upperLimit = 120
+        }
+    }
+
+    over "materials"
+    {
+        over "mat_53"
+        {
+            over "PBRShader"
+            {
+                float inputs:clearcoat = 0.25
+                float inputs:metallic = 0.02
+                float inputs:roughness = 0.45999998
+            }
+        }
+    }
+}
+

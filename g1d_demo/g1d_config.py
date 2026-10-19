@@ -3,6 +3,7 @@
 Pure data - torch tensors only, no Isaac imports.
 """
 
+import math
 import os
 import torch
 
@@ -128,26 +129,19 @@ DIVIDER_X = (-8.5, -11.0, -13.75, -15.25, -18.0, -19.5)
 ROW_DY = 2.0
 TABLE_POS = tuple((float(x), float(dy)) for x in DIVIDER_X for dy in (-ROW_DY, ROW_DY))
 TABLE_TOP = 0.78  # working surface height (arm poses calibrated ~0.78)
-TABLE_SIZE = (0.9, 1.8, 0.06)  # LONG AXIS Y: east face is narrow, the
-# same-row gaps between tables are then 2.5-0.9 = 1.6 m wide and the
-# base can stand/spin in them
-# two slots per table, fully ON the tabletop near the east edge:
-# (dx, dy) from table center. dx 0.15 keeps every object supported
-# (the 0.42 edge slots tipped objects off onto the floor); the base
-# parks with its nose between the table legs UNDER the top and the
-# jaw (~0.48 ahead) lands exactly on the slot line
-SLOT_DXY = ((0.15, 0.40), (0.15, -0.40))
-SLOT_STANDOFF = 0.65  # base parks this far EAST of the slot x: the
-# nose (0.30 half-length) stays CLEAR of the tabletop edge (slot
-# dx 0.15 + table edge 0.45 -> 0.20 m margin) - the G1D body is
-# too tall to poke under the top like an AGV (the 0.48 standoff
-# rammed the slab edge and shoved objects off)
-# diagonal entry/exit runway: approach legs START this far east of
-# the slot. 4.2 (not 3.1): the FAR-row slots (|y| 2.4) need up to
-# 2.7 m of lateral from the center lane - at the 0.7 rad correction
-# cap that needs >3.2 m of runway plus the standoff approach
-SLOT_RUNWAY = 4.2
-CORRIDOR_LANE = 0.3  # transit lane |y| (corridor floor is |y| < 0.8)
+TABLE_SIZE = (0.9, 1.8, 0.06)  # LONG AXIS Y: the corridor-facing
+# inner edge is a 0.9 m face; same-row gaps stay 1.6 m
+# two slots per table on the INNER (corridor-facing) edge: dx along
+# the table length, dy = distance from the table center TOWARD the
+# corridor (sign applied per row in table_slot). Robot and objects
+# both stay on the inner side only (user spec) - the base never
+# enters the row bands, which also kills the nose-on table wedge
+# the east-end standoffs kept hitting
+SLOT_DXY = ((-0.22, 0.55), (0.22, 0.55))
+SLOT_STANDOFF = 0.70  # base parks this far corridor-side of the slot
+# (jaw reach 0.48 + margins: base edge keeps ~0.2 m clear of the
+# tabletop face; the 0.48 east-end standoffs jammed the nose on it)
+CORRIDOR_LANE = 0.3  # transit lane |y| (corridor floor is |y| < 1.1)
 # half the tables stocked, the other half are delivery targets
 # -> 12 pick+place tasks per cycle
 STOCKED_TABLES = (0, 2, 4, 6, 8, 10)
@@ -155,10 +149,12 @@ TOTE_SIZE = 0.12  # cuboid tote edge
 
 
 def table_slot(table_idx: int, slot_idx: int):
-    """World (x, y) of a slot on table `table_idx`."""
+    """World (x, y) of a slot on table `table_idx`. The slot dy is
+    stored as a distance TOWARD the corridor; its sign follows the
+    row so both rows get corridor-facing slots."""
     tx, ty = TABLE_POS[table_idx]
     dx, dy = SLOT_DXY[slot_idx]
-    return (tx + dx, ty + dy)
+    return (tx + dx, ty - math.copysign(dy, ty))
 
 
 # --- object catalog ----------------------------------------------------
@@ -172,6 +168,13 @@ def _prop(name):
     return os.path.join(WAREHOUSE, "Props", name + ".usd")
 
 
+ARTVIP = os.path.join(REPO, "g1d_demo", "assets", "artvip")
+
+
+def _av(*parts):
+    return os.path.join(ARTVIP, *parts)
+
+
 OBJECT_CATALOG = {
     "crate": (_prop("SM_CratePlastic_A_01"), None, 0.34, 0.5),
     "card_a": (_prop("SM_CardBoxA_01"), None, 0.22, 0.4),
@@ -180,20 +183,28 @@ OBJECT_CATALOG = {
     "card_d": (_prop("SM_CardBoxD_01"), None, 0.30, 0.6),
     "tote_y": (None, (0.95, 0.80, 0.20), 0.10, 0.15),
     "tote_g": (None, (0.2, 0.8, 0.3), 0.10, 0.15),
+    # ArtVIP (huggingface X-Humanoid/ArtVIP) articulated digital
+    # twins - rigidified whole (single box collider) for the snap
+    # grasp; the basket is the true "grab the handle" object
+    "av_basket": (_av("basket_1", "model_basket_1.usda"), None, 0.25, 0.6),
+    "av_toolbox": (_av("toolbox", "model.usda"), None, 0.15, 0.8),
+    "av_trash": (_av("trash_can", "model.usd"), None, 0.35, 1.0),
+    "av_pump": (_av("pump_bottle", "model.usd"), None, 0.18, 0.3),
+    "av_carton": (_av("cardboard_box", "model.usda"), None, 0.15, 0.4),
 }
 # which object sits on each of the 12 stocked slots (in task order)
 OBJECT_ORDER = (
+    "av_basket",
     "crate",
-    "card_a",
     "tote_y",
-    "card_b",
+    "card_a",
     "card_c",
     "tote_g",
     "card_d",
-    "crate",
-    "card_a",
+    "av_basket",
+    "av_carton",
     "card_b",
     "tote_y",
-    "card_c",
+    "av_trash",
 )
 OBJECT_NAMES = tuple(f"obj_{i:02d}" for i in range(len(OBJECT_ORDER)))

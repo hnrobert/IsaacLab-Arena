@@ -54,7 +54,6 @@ from g1d_config import (
     OBJECT_CATALOG,
     OBJECT_NAMES,
     OBJECT_ORDER,
-    SLOT_RUNWAY,
     SLOT_STANDOFF,
     STOCKED_TABLES,
     TABLE_POS,
@@ -121,61 +120,40 @@ def corridor_transit(driver: G1DDriver, tx: float, lane: float = CORRIDOR_LANE) 
 
 
 def approach_slot(driver: G1DDriver, sx: float, sy: float, arm_hold=None) -> bool:
-    """Final approach onto a table slot: diagonal from the corridor
-    runway (east of the neighboring table) down onto the in-gap
-    standoff, facing -x. The diagonal stays below the table band
-    until inside the gap - a straight row-line entry would clip the
-    neighboring table's inner corner."""
+    """Inner-side approach: the slot sits on the table's corridor-
+    facing edge; the robot stays IN the corridor the whole time -
+    transit along x to the slot's x, then face the table (+-pi/2)
+    and creep to the standoff with cross-axis (x) homing on the
+    slot. The base never enters the row bands, so the nose-on table
+    wedges of the east-end standoffs are geometrically gone."""
+    row_sign = 1.0 if sy >= 0 else -1.0
+    standoff_y = sy - row_sign * SLOT_STANDOFF
+    face = (math.pi / 2) * row_sign
     bx, by, yaw = driver.pose()
-    runway_x = sx + SLOT_RUNWAY
-    if bx < runway_x - 0.4 or abs(by) > 0.55:
-        # pre-bias the transit lane toward the target row - the far
-        # row slots otherwise need more lateral than the diagonal
-        # can close even with the long runway
-        corridor_transit(driver, runway_x, lane=CORRIDOR_LANE * (1.0 if sy >= 0 else -1.0))
-    driver.spin_to(math.pi, timeout=20.0)
+    # corridor transit to the slot x (lane biased toward the row so
+    # the final creep is short)
+    if abs(bx - sx) > 0.4 or abs(by) > 0.7:
+        corridor_transit(driver, sx, lane=CORRIDOR_LANE * row_sign)
+    driver.spin_to(face, timeout=15.0)
     bx, by, _ = driver.pose()
-    # main diagonal stops 0.5 m SHORT of the standoff; one slow
-    # final leg closes both x and y - a fixed creep past the
-    # standoff rammed the tabletop edge (the body is too tall to
-    # nose under it) and wedged the exit spin
-    dist = max(0.2, bx - (sx + SLOT_STANDOFF + 0.5))
-    driver.forward_line(dist, target_y=sy, speed=0.3, arm_hold=arm_hold, timeout=40.0, lat_cap=0.7)
-    driver.forward_line(0.5, target_y=sy, speed=0.12, arm_hold=arm_hold, timeout=20.0, lat_cap=0.7)
-    driver.spin_to(math.pi, timeout=8.0, tol=0.15)
-    # lateral trim retry (the snap radius only tolerates ~0.2 m)
-    for _ in range(1):
-        _, by_now, _ = driver.pose()
-        if abs(by_now - sy) < 0.12:
-            break
-        print(f"  y-trim: {by_now:+.2f} -> {sy:+.2f}", flush=True)
-        bx, _, _ = driver.pose()
-        driver.spin_to(0.0, timeout=10.0)
-        driver.forward_line(max(0.4, (sx + SLOT_RUNWAY) - bx), target_y=CORRIDOR_LANE, speed=0.3, timeout=30.0)
-        driver.spin_to(math.pi, timeout=10.0)
-        driver.forward_line(
-            (sx + SLOT_RUNWAY) - (sx + SLOT_STANDOFF), target_y=sy, speed=0.3, timeout=30.0, lat_cap=0.7
-        )
-        driver.spin_to(math.pi, timeout=8.0, tol=0.15)
+    # creep to the standoff: along-track = toward the table, cross
+    # track = x homing to the slot
+    driver.forward_line(
+        max(0.15, abs(standoff_y - by)), target_x=sx, speed=0.2, arm_hold=arm_hold, timeout=30.0, lat_cap=0.6
+    )
+    driver.spin_to(face, timeout=8.0, tol=0.15)
     bx_fin, by_fin, _ = driver.pose()
-    ok_xy = abs(by_fin - sy) < 0.30 and abs(bx_fin - (sx + SLOT_STANDOFF)) < 0.35
+    ok_xy = abs(by_fin - standoff_y) < 0.20 and abs(bx_fin - sx) < 0.25
     if not ok_xy:
-        print(f"  approach ends at ({bx_fin:.2f},{by_fin:+.2f}) vs ({sx + SLOT_STANDOFF:.2f},{sy:+.2f})", flush=True)
+        print(f"  approach ends at ({bx_fin:.2f},{by_fin:+.2f}) vs ({sx:.2f},{standoff_y:+.2f})", flush=True)
     return ok_xy
 
 
 def exit_slot(driver: G1DDriver, arm_hold=None) -> None:
-    """Mirror of the approach: spin in the gap (1.6 m wide, the base
-    sweep is 0.86) and diagonally back out to the corridor lane."""
-    driver.spin_to(0.0, timeout=15.0)
-    driver.forward_line(
-        SLOT_RUNWAY - SLOT_STANDOFF,
-        target_y=CORRIDOR_LANE,
-        speed=0.3,
-        arm_hold=arm_hold,
-        timeout=40.0,
-        lat_cap=0.7,
-    )
+    """Back straight out of the standoff into the corridor (reversing
+    along the current heading = away from the table); the next
+    corridor_transit sets the heading it needs."""
+    driver.back_straight(0.7, speed=0.20, arm_hold=arm_hold, timeout=20.0)
 
 
 def main() -> None:
@@ -207,11 +185,16 @@ def main() -> None:
     driver = G1DDriver(scene["robot"], sim, totes=[scene[nm] for nm in OBJECT_NAMES], step=stepper.step)
     x0, y0, yaw0 = driver.pose()
     print(f"root after reset: x={x0:.3f} y={y0:.3f} yaw={yaw0:.3f}", flush=True)
-    for _ in range(240):  # 4 s settle (objects drop onto their tables)
-        stepper.step(sim)
-        scene["robot"].update(sim.get_physics_dt())
-        for nm in OBJECT_NAMES:
-            scene[nm].update(sim.get_physics_dt())
+
+    # arm UP FIRST, then a COMMANDED settle: 4 s of uncommanded
+    # joints let the arms collapse under gravity and flail the free
+    # base 3 m across the hall with a random yaw (spawn printed yaw
+    # 1.405) - every subsequent approach started from chaos. The
+    # commanded ramp + hold keeps the base parked while the objects
+    # drop onto their tables
+    driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.5, timeout=8.0)
+    driver.hold_arm(ARM_HIGH.tolist(), 3.0)
+    driver.fingers_to(FINGER_OPEN)
     # each object's SETTLED center height - used by the per-task
     # resets (kit prop origins/heights vary, so measure, don't guess)
     settle_z = {}
@@ -231,13 +214,18 @@ def main() -> None:
     except Exception as exc:  # noqa: BLE001
         print(f"camera setup skipped: {exc}", flush=True)
 
-    # arm UP before the first wheel turns - it stays up for every
-    # approach (user spec: raised from the start). Smooth ramp: a
-    # raw hold_arm here snapped the 1.45-rad shoulder swing shut
-    # in ~0.3 s (one of the "finishes too fast" swings)
-    driver.move_arm_smooth(ARM_HIGH.tolist(), speed=0.5, timeout=8.0)
-    driver.hold_arm(ARM_HIGH.tolist(), 0.2)
-    driver.fingers_to(FINGER_OPEN)
+    # PARK: square up and return to the corridor origin so the
+    # first approach starts from a known state (forward_line both
+    # ways - drive_to's reverse path wanders on big corrections)
+    driver.spin_to(0.0, timeout=20.0)
+    bx, by, _ = driver.pose()
+    if abs(bx - 0.5) > 0.4 or abs(by) > 0.4:
+        if bx > 0.9:
+            driver.spin_to(math.pi, timeout=15.0)
+            driver.forward_line(bx - 0.5, target_y=0.0, speed=0.3, timeout=40.0)
+        else:
+            driver.forward_line(max(0.3, 0.5 - bx), target_y=0.0, speed=0.3, timeout=40.0)
+    print(f"parked at {driver.pose()}", flush=True)
 
     tasks = build_tasks()
     picks = 0
@@ -278,11 +266,6 @@ def main() -> None:
                 print(f"  RESET-WRITE readback: ({tp_w[0]:.2f},{tp_w[1]:+.2f},{tp_w[2]:.2f})", flush=True)
                 driver.run_seconds(0.2)
                 print("  (object re-seated after approach knock)", flush=True)
-                # TEMP trace: does it rest or tip right after the reset?
-                for _tr in range(6):
-                    driver.run_seconds(0.4)
-                    tp_tr = n(obj.data.root_pos_w)[0]
-                    print(f"  TRACE {obj_type}: ({tp_tr[0]:.2f},{tp_tr[1]:+.2f},{tp_tr[2]:.2f})", flush=True)
 
             # --- hover + proximity snap (grab at the object's own
             # anchor height - the crate grabs its HANDLE) -----------
@@ -325,7 +308,7 @@ def main() -> None:
             carry_hold = hold_cmd(driver, ARM_LEVEL.tolist(), FINGER_OPEN.tolist())
 
             # --- transit + approach the destination slot ----------
-            corridor_transit(driver, dx_ + SLOT_RUNWAY)
+            corridor_transit(driver, dx_, lane=CORRIDOR_LANE * (1.0 if dy_ >= 0 else -1.0))
             if not approach_slot(driver, dx_, dy_, arm_hold=carry_hold):
                 print(f"{task['obj']}: delivery approach FAILED - drop in corridor", flush=True)
                 driver.detach()
