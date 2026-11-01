@@ -307,10 +307,66 @@ def bind_object_materials(env_ns: str = "/World/envs/env_0") -> int:
         root = stage.GetPrimAtPath(f"{env_ns}/{nm}")
         if not root:
             continue
-        UsdShade.MaterialBindingAPI.Apply(root).Bind(cache[key], UsdShade.Tokens.weakerThanDescendants)
-        bound += 1
+        # The shape spawners bind their own diffuse-color material
+        # DIRECTLY on the gprim, and a weakerThanDescendants root
+        # bind loses to it (why the cups/spheres/books/towels stayed
+        # flat). Rebind on EVERY gprim under the object, clearing
+        # any existing direct binding first.
+        for p in stage.Traverse():
+            path = str(p.GetPath())
+            if path != f"{env_ns}/{nm}" and not path.startswith(f"{env_ns}/{nm}/"):
+                continue
+            if p.GetTypeName() not in ("Mesh", "Cube", "Sphere", "Cylinder", "Capsule", "Cone", "Plane"):
+                continue
+            rel = p.GetRelationship("material:binding")
+            if rel:
+                rel.ClearTargets(True)  # drop the spawner's flat color
+            UsdShade.MaterialBindingAPI.Apply(p).Bind(cache[key], UsdShade.Tokens.strongerThanDescendants)
+            _write_box_uv(p)
+            bound += 1
     print(f"object materials bound to {bound} prims", flush=True)
     return bound
+
+
+def _write_box_uv(prim) -> None:
+    """Author an `st` primvar via box projection.
+
+    The IsaacLab shape spawners create Meshes with NO uv primvar -
+    the UsdPrimvarReader in the material network then returns a
+    constant and the texture collapses to ONE texel (the flat
+    gray/white every generated object rendered as). Triplanar box
+    projection from the mesh points gives each face a varying uv,
+    so grain/speckle/weave actually show.
+    """
+    import numpy as np
+
+    from pxr import Sdf, UsdGeom
+
+    mesh = UsdGeom.Mesh(prim)
+    pts = mesh.GetPointsAttr().Get()
+    fvi = mesh.GetFaceVertexIndicesAttr().Get()
+    if not pts or not fvi:
+        return
+    pts = np.array([[c for c in p] for p in pts])
+    lo, hi = pts.min(axis=0), pts.max(axis=0)
+    span = np.maximum(hi - lo, 1e-6)
+    uvs, idx = [], []
+    for v in fvi:
+        q = (pts[v] - lo) / span
+        # dominant axis of this vertex's offset from the mesh center
+        d = np.abs(pts[v] - (lo + hi) / 2.0)
+        ax = int(np.argmax(d))
+        if ax == 0:
+            uv = (q[1], q[2])
+        elif ax == 1:
+            uv = (q[0], q[2])
+        else:
+            uv = (q[0], q[1])
+        uvs.append(uv)
+        idx.append(len(uvs) - 1)
+    pv = UsdGeom.PrimvarsAPI(prim).CreatePrimvar("st", Sdf.ValueTypeNames.TexCoord2fArray, "faceVarying")
+    pv.Set(uvs)
+    pv.SetIndicesAttr(idx)
 
 
 def add_grip_material(env_ns="/World/envs/env_0") -> None:

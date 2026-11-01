@@ -99,18 +99,40 @@ def fruit(base, speckle):
     return img
 
 
+def _tint(gray_img, rgb):
+    """Multiply a gray base map by a color (per-type identity)."""
+    from PIL import ImageEnhance
+
+    r, g, b = (c / 190.0 for c in rgb)  # metal() base is ~190 gray
+    img = gray_img.copy()
+    px = img.load()
+    for y in range(img.size[1]):
+        for x in range(img.size[0]):
+            pr, pg, pb = px[x, y]
+            px[x, y] = (min(255, int(pr * r)), min(255, int(pg * g)), min(255, int(pb * b)))
+    return ImageEnhance.Brightness(img).enhance(1.1)
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
+    m = metal()
+    p_paper = paper()
     out = {
         "wood.png": wood(),
-        "metal.png": metal(),
-        "paper.png": paper(),
+        "metal.png": m,
+        "paper.png": p_paper,
         "fabric.png": fabric(),
         "plastic_blue.png": plastic((38, 96, 205)),
         "plastic_yellow.png": plastic((228, 190, 48)),
         "apple_red.png": fruit((178, 32, 28), 26),
         "orange.png": fruit((232, 138, 24), 22),
         "lime_green.png": fruit((72, 178, 62), 24),
+        # per-type baked tints: cups read as red/blue enamel, books
+        # as red/green covers (identity survives the gray base map)
+        "metal_red.png": _tint(m, (205, 40, 36)),
+        "metal_blue.png": _tint(m, (40, 88, 210)),
+        "paper_red.png": _tint(p_paper, (186, 54, 46)),
+        "paper_green.png": _tint(p_paper, (44, 142, 60)),
     }
     for name, img in out.items():
         img.save(os.path.join(OUT, name))

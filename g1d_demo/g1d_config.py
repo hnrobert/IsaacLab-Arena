@@ -268,13 +268,13 @@ OBJECT_FINISH_DEFAULT = (0.0, 0.5)
 # metallic) - g1d_make_object_textures.py output; a plain color
 # renders flat, a texture reads as a real material (user spec)
 OBJECT_TEXTURE = {
-    "cup_r": ("metal.png", 0.25, 0.85),
-    "cup_b": ("metal.png", 0.25, 0.85),
+    "cup_r": ("metal_red.png", 0.25, 0.70),
+    "cup_b": ("metal_blue.png", 0.25, 0.70),
     "apple": ("apple_red.png", 0.30, 0.0),
     "orange": ("orange.png", 0.30, 0.0),
     "lime": ("lime_green.png", 0.30, 0.0),
-    "book_r": ("paper.png", 0.80, 0.0),
-    "book_g": ("paper.png", 0.80, 0.0),
+    "book_r": ("paper_red.png", 0.80, 0.0),
+    "book_g": ("paper_green.png", 0.80, 0.0),
     "towel_w": ("fabric.png", 0.95, 0.0),
     "battery": ("metal.png", 0.35, 0.75),
     "tote_y": ("plastic_yellow.png", 0.50, 0.0),
