@@ -304,15 +304,15 @@ OBJECT_TEXTURE = {
     # SimReady props: their OmniPBR MDL + relative texture refs drop
     # the mesh in the RTX GUI (the cone/sign lesson) - rebind to
     # PreviewSurface networks driven by the SAME albedo PNGs
-    "sr_mug": ("../../simready/mug/texture/T_Mug_D1_Albedo.png", 0.40, 0.05),
-    "sr_mug2": ("../../simready/mug2/texture/T_Mug_B1_Albedo.png", 0.40, 0.05),
-    "sr_banana": ("../../simready/banana/Materials/Textures/011_banana_COLOR.png", 0.60, 0.0),
-    "sr_cracker": ("../../simready/cracker/Materials/Textures/003_cracker_box_COLOR.png", 0.80, 0.0),
-    "sr_soup": ("../../simready/soup/Materials/Textures/005_tomato_soup_can_COLOR.png", 0.35, 0.40),
-    "sr_mustard": ("../../simready/mustard/Materials/Textures/006_mustard_bottle_COLOR.png", 0.40, 0.10),
-    "sr_drill": ("../../simready/drill/Materials/Textures/035_power_drill_COLOR.png", 0.60, 0.30),
-    "sr_marker": ("../../simready/marker/Materials/Textures/040_large_marker_COLOR.png", 0.40, 0.10),
-    "sr_foam": ("../../simready/foam/Materials/Textures/061_foam_brick_COLOR.png", 0.90, 0.0),
+    "sr_mug": ("../simready/mug/texture/T_Mug_D1_Albedo.png", 0.40, 0.05),
+    "sr_mug2": ("../simready/mug2/texture/T_Mug_B1_Albedo.png", 0.40, 0.05),
+    "sr_banana": ("../simready/banana/Materials/Textures/011_banana_COLOR.png", 0.60, 0.0),
+    "sr_cracker": ("../simready/cracker/Materials/Textures/003_cracker_box_COLOR.png", 0.80, 0.0),
+    "sr_soup": ("../simready/soup/Materials/Textures/005_tomato_soup_can_COLOR.png", 0.35, 0.40),
+    "sr_mustard": ("../simready/mustard/Materials/Textures/006_mustard_bottle_COLOR.png", 0.40, 0.10),
+    "sr_drill": ("../simready/drill/Materials/Textures/035_power_drill_COLOR.png", 0.60, 0.30),
+    "sr_marker": ("../simready/marker/Materials/Textures/040_large_marker_COLOR.png", 0.40, 0.10),
+    "sr_foam": ("../simready/foam/Materials/Textures/061_foam_brick_COLOR.png", 0.90, 0.0),
 }
 # parallel rack rows flanking both sides of the work aisle: the
 # hall is 30 m wide (walls +-15), tables end at +-2.9, so three
