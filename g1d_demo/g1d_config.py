@@ -173,10 +173,15 @@ def _prop(name):
 
 
 ARTVIP = os.path.join(REPO, "g1d_demo", "assets", "artvip")
+SIMREADY = os.path.join(REPO, "g1d_demo", "assets", "simready")
 
 
 def _av(*parts):
     return os.path.join(ARTVIP, *parts)
+
+
+def _sr(*parts):
+    return os.path.join(SIMREADY, *parts)
 
 
 RED = (0.85, 0.15, 0.12)
@@ -218,6 +223,19 @@ OBJECT_CATALOG = {
     "av_stapler": (_av("stapler", "model_stapler_1.usd"), None, 0.05, 0.10),
     "av_notebook": (_av("notebook", "model_notebook_0.usd"), None, 0.04, 0.20),
     "av_match": (_av("match", "model_match.usd"), None, 0.04, 0.05),
+    # NVIDIA SimReady (Isaac 6.2 kit props / YCB digital twins,
+    # discovered via the SimScene USD Search workflow): single-file
+    # USDs with baked PBR - the "real asset" versions of the
+    # themed task props
+    "sr_mug": (_sr("mug", "model.usd"), None, 0.06, 0.20),
+    "sr_mug2": (_sr("mug2", "model.usd"), None, 0.06, 0.20),
+    "sr_banana": (_sr("banana", "model.usd"), None, 0.03, 0.05),
+    "sr_cracker": (_sr("cracker", "model.usd"), None, 0.08, 0.30),
+    "sr_soup": (_sr("soup", "model.usd"), None, 0.04, 0.10),
+    "sr_mustard": (_sr("mustard", "model.usd"), None, 0.08, 0.30),
+    "sr_drill": (_sr("drill", "model.usd"), None, 0.09, 0.60),
+    "sr_marker": (_sr("marker", "model.usd"), None, 0.04, 0.05),
+    "sr_foam": (_sr("foam", "model.usd"), None, 0.05, 0.15),
 }
 # The 6 stocked tables are THEMED after UniBot-V1 challenge tasks
 # (ref: hnrobert-unibot-world-challenge ref/tasks-detail); each entry
@@ -235,13 +253,17 @@ OBJECT_CATALOG = {
 # to a different body than the prim we write), and the trash_can
 # accepts the teleport but its BoxCol falls through. Both stay in
 # the catalog; blocked on body resolution (see memory notes)
+# Real SimReady props per the challenge task specs (mugs for T01,
+# banana/mustard as the fruit-bench stand-ins for T04/T02, drill +
+# marker for T09 tools, cracker box for T08 storage, foam brick as
+# the folded-towel stand-in for T16)
 TABLE_THEMES = (
-    ("T01 挂杯子 HangCup", "cup_r", "cup_b"),
-    ("T04 水果分类 FruitSort", "apple", "orange"),
-    ("T08 整理书架 Bookshelf", "book_r", "book_g"),
-    ("T09 工具箱收纳 ToolStorage", "crate", "card_d"),
-    ("T02 水果收集 FruitCollect", "crate", "lime"),
-    ("T16 叠毛巾 TowelFold", "towel_w", "tote_y"),
+    ("T01 挂杯子 HangCup", "sr_mug", "sr_mug2"),
+    ("T04 水果分类 FruitSort", "sr_banana", "sr_mustard"),
+    ("T08 整理书架 Bookshelf", "sr_cracker", "sr_marker"),
+    ("T09 工具箱收纳 ToolStorage", "sr_drill", "sr_soup"),
+    ("T02 水果收集 FruitCollect", "sr_banana", "sr_cracker"),
+    ("T16 叠毛巾 TowelFold", "sr_foam", "sr_mug"),
 )
 OBJECT_ORDER = tuple(obj for _theme, o0, o1 in TABLE_THEMES for obj in (o0, o1))
 OBJECT_NAMES = tuple(f"obj_{i:02d}" for i in range(len(OBJECT_ORDER)))

@@ -1,0 +1,313 @@
+#usda 1.0
+(
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+over "Dex5_URDF_R" (
+    prepend apiSchemas = ["IsaacRobotAPI"]
+)
+{
+    prepend rel isaac:physics:robotJoints = [
+        </Dex5_URDF_R/root_joint>,
+        </Dex5_URDF_R/joints/Roll_21R>,
+        </Dex5_URDF_R/joints/Roll_31R>,
+        </Dex5_URDF_R/joints/Roll_41R>,
+        </Dex5_URDF_R/joints/Roll_51R>,
+        </Dex5_URDF_R/joints/Yaw_11R>,
+        </Dex5_URDF_R/joints/Pitch_22R>,
+        </Dex5_URDF_R/joints/Pitch_32R>,
+        </Dex5_URDF_R/joints/Pitch_42R>,
+        </Dex5_URDF_R/joints/Pitch_52R>,
+        </Dex5_URDF_R/joints/Roll_12R>,
+        </Dex5_URDF_R/joints/Pitch_23R>,
+        </Dex5_URDF_R/joints/Pitch_33R>,
+        </Dex5_URDF_R/joints/Pitch_43R>,
+        </Dex5_URDF_R/joints/Pitch_53R>,
+        </Dex5_URDF_R/joints/Pitch_13R>,
+        </Dex5_URDF_R/joints/Pitch_24R>,
+        </Dex5_URDF_R/joints/Pitch_34R>,
+        </Dex5_URDF_R/joints/Pitch_44R>,
+        </Dex5_URDF_R/joints/Pitch_54R>,
+        </Dex5_URDF_R/joints/Pitch_14R>,
+    ]
+    prepend rel isaac:physics:robotLinks = [
+        </Dex5_URDF_R/base_link_R>,
+        </Dex5_URDF_R/Link_21R>,
+        </Dex5_URDF_R/Link_31R>,
+        </Dex5_URDF_R/Link_41R>,
+        </Dex5_URDF_R/Link_51R>,
+        </Dex5_URDF_R/Link_11R>,
+        </Dex5_URDF_R/Link_22R>,
+        </Dex5_URDF_R/Link_32R>,
+        </Dex5_URDF_R/Link_42R>,
+        </Dex5_URDF_R/Link_52R>,
+        </Dex5_URDF_R/Link_12R>,
+        </Dex5_URDF_R/Link_23R>,
+        </Dex5_URDF_R/Link_33R>,
+        </Dex5_URDF_R/Link_43R>,
+        </Dex5_URDF_R/Link_53R>,
+        </Dex5_URDF_R/Link_13R>,
+        </Dex5_URDF_R/Link_24R>,
+        </Dex5_URDF_R/Link_34R>,
+        </Dex5_URDF_R/Link_44R>,
+        </Dex5_URDF_R/Link_54R>,
+        </Dex5_URDF_R/Link_14R>,
+    ]
+
+    over "root_joint" (
+        prepend apiSchemas = ["IsaacJointAPI"]
+    )
+    {
+    }
+
+    over "base_link_R" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "joints"
+    {
+        over "Roll_21R" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "Roll_31R" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "Roll_41R" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "Roll_51R" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "Yaw_11R" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "Pitch_22R" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "Pitch_32R" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "Pitch_42R" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "Pitch_52R" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "Roll_12R" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "Pitch_23R" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "Pitch_33R" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "Pitch_43R" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "Pitch_53R" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "Pitch_13R" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "Pitch_24R" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "Pitch_34R" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "Pitch_44R" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "Pitch_54R" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "Pitch_14R" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+    }
+
+    over "Link_21R" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "Link_31R" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "Link_41R" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "Link_51R" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "Link_11R" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "Link_22R" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "Link_32R" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "Link_42R" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "Link_52R" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "Link_12R" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "Link_23R" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "Link_33R" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "Link_43R" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "Link_53R" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "Link_13R" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "Link_24R" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "Link_34R" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "Link_44R" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "Link_54R" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "Link_14R" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+}
+

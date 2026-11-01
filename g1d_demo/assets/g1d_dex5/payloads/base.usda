@@ -1,0 +1,974 @@
+#usda 1.0
+(
+    defaultPrim = "Dex5_URDF_R"
+    metersPerUnit = 1
+    subLayers = [
+        @./robot.usda@
+    ]
+    upAxis = "Z"
+)
+
+def Xform "Dex5_URDF_R" (
+    prepend apiSchemas = ["RobotAPI"]
+)
+{
+    string isaac:description
+    string isaac:namespace
+    rel isaac:physics:robotJoints = [
+        </Dex5_URDF_R/joints/Roll_21R>,
+        </Dex5_URDF_R/joints/Pitch_22R>,
+        </Dex5_URDF_R/joints/Pitch_23R>,
+        </Dex5_URDF_R/joints/Pitch_24R>,
+        </Dex5_URDF_R/joints/Roll_31R>,
+        </Dex5_URDF_R/joints/Pitch_32R>,
+        </Dex5_URDF_R/joints/Pitch_33R>,
+        </Dex5_URDF_R/joints/Pitch_34R>,
+        </Dex5_URDF_R/joints/Roll_41R>,
+        </Dex5_URDF_R/joints/Pitch_42R>,
+        </Dex5_URDF_R/joints/Pitch_43R>,
+        </Dex5_URDF_R/joints/Pitch_44R>,
+        </Dex5_URDF_R/joints/Roll_51R>,
+        </Dex5_URDF_R/joints/Pitch_52R>,
+        </Dex5_URDF_R/joints/Pitch_53R>,
+        </Dex5_URDF_R/joints/Pitch_54R>,
+        </Dex5_URDF_R/joints/Yaw_11R>,
+        </Dex5_URDF_R/joints/Roll_12R>,
+        </Dex5_URDF_R/joints/Pitch_13R>,
+        </Dex5_URDF_R/joints/Pitch_14R>,
+    ]
+    rel isaac:physics:robotLinks = [
+        </Dex5_URDF_R/base_link_R>,
+        </Dex5_URDF_R/Link_21R>,
+        </Dex5_URDF_R/Link_22R>,
+        </Dex5_URDF_R/Link_23R>,
+        </Dex5_URDF_R/Link_24R>,
+        </Dex5_URDF_R/Link_31R>,
+        </Dex5_URDF_R/Link_32R>,
+        </Dex5_URDF_R/Link_33R>,
+        </Dex5_URDF_R/Link_34R>,
+        </Dex5_URDF_R/Link_41R>,
+        </Dex5_URDF_R/Link_42R>,
+        </Dex5_URDF_R/Link_43R>,
+        </Dex5_URDF_R/Link_44R>,
+        </Dex5_URDF_R/Link_51R>,
+        </Dex5_URDF_R/Link_52R>,
+        </Dex5_URDF_R/Link_53R>,
+        </Dex5_URDF_R/Link_54R>,
+        </Dex5_URDF_R/Link_11R>,
+        </Dex5_URDF_R/Link_12R>,
+        </Dex5_URDF_R/Link_13R>,
+        </Dex5_URDF_R/Link_14R>,
+    ]
+    quatd xformOp:orient = (1, 0, 0, 0)
+    double3 xformOp:scale = (1, 1, 1)
+    double3 xformOp:translate = (0, 0, 0)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+    def Xform "base_link_R" (
+        prepend apiSchemas = ["LinkAPI"]
+    )
+    {
+        string isaac:nameOverride
+        quatd xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "base_link_R" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh>
+            )
+            {
+                rel material:binding = </Dex5_URDF_R/Looks/material_C0C0C0> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "base_link_R" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+            }
+        }
+    }
+
+    def Xform "Link_21R" (
+        prepend apiSchemas = ["LinkAPI"]
+    )
+    {
+        string isaac:nameOverride
+        quatd xformOp:orient = (0.7071055173873901, 0, 0, 0.7071080803871155)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0.009999999776482582, 0.07314299792051315, -0.00347020011395216)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_21R" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_1_1>
+            )
+            {
+                rel material:binding = </Dex5_URDF_R/Looks/material_CAD1EE> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_21R" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_1_2>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+            }
+        }
+    }
+
+    def Scope "joints"
+    {
+    }
+
+    def Xform "Link_22R" (
+        prepend apiSchemas = ["LinkAPI"]
+    )
+    {
+        string isaac:nameOverride
+        quatd xformOp:orient = (0.49999910593032837, 0.49999910593032837, 0.5000008940696716, 0.5000008940696716)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0.009999984875321388, 0.07734299451112747, -0.00347020011395216)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_22R" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_2>
+            )
+            {
+                rel material:binding = </Dex5_URDF_R/Looks/material_CAD1EE> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_22R" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_2_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+            }
+        }
+    }
+
+    def Xform "Link_23R" (
+        prepend apiSchemas = ["LinkAPI"]
+    )
+    {
+        string isaac:nameOverride
+        quatd xformOp:orient = (0.49999910593032837, 0.49999910593032837, 0.5000008940696716, 0.5000008940696716)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0.009999843314290047, 0.1173429936170578, -0.00347020011395216)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_23R" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_3>
+            )
+            {
+                rel material:binding = </Dex5_URDF_R/Looks/material_CAD1EE> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_23R" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_3_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+            }
+        }
+    }
+
+    def Xform "Link_24R" (
+        prepend apiSchemas = ["LinkAPI"]
+    )
+    {
+        string isaac:nameOverride
+        quatd xformOp:orient = (0.49999910593032837, 0.49999910593032837, 0.5000008940696716, 0.5000008940696716)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0.009999768808484077, 0.13832758367061615, -0.002665896899998188)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_24R" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_4>
+            )
+            {
+                rel material:binding = </Dex5_URDF_R/Looks/material_CAD1EE> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_24R" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_4_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+            }
+        }
+    }
+
+    def Xform "Link_31R" (
+        prepend apiSchemas = ["LinkAPI"]
+    )
+    {
+        string isaac:nameOverride
+        quatd xformOp:orient = (0.7071055173873901, 0, 0, 0.7071080803871155)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (-0.012000000104308128, 0.07714299857616425, -0.00347020011395216)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_31R" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_5>
+            )
+            {
+                rel material:binding = </Dex5_URDF_R/Looks/material_CAD1EE> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_31R" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_5_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+            }
+        }
+    }
+
+    def Xform "Link_32R" (
+        prepend apiSchemas = ["LinkAPI"]
+    )
+    {
+        string isaac:nameOverride
+        quatd xformOp:orient = (0.49999910593032837, 0.49999910593032837, 0.5000008940696716, 0.5000008940696716)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (-0.012000015005469322, 0.08134299516677856, -0.00347020011395216)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_32R" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_6>
+            )
+            {
+                rel material:binding = </Dex5_URDF_R/Looks/material_CAD1EE> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_32R" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_6_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+            }
+        }
+    }
+
+    def Xform "Link_33R" (
+        prepend apiSchemas = ["LinkAPI"]
+    )
+    {
+        string isaac:nameOverride
+        quatd xformOp:orient = (0.49999910593032837, 0.49999910593032837, 0.5000008940696716, 0.5000008940696716)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (-0.012000156566500664, 0.12134299427270889, -0.00347020011395216)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_33R" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_7>
+            )
+            {
+                rel material:binding = </Dex5_URDF_R/Looks/material_CAD1EE> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_33R" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_7_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+            }
+        }
+    }
+
+    def Xform "Link_34R" (
+        prepend apiSchemas = ["LinkAPI"]
+    )
+    {
+        string isaac:nameOverride
+        quatd xformOp:orient = (0.49999910593032837, 0.49999910593032837, 0.5000008940696716, 0.5000008940696716)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (-0.012000231072306633, 0.14232759177684784, -0.002665896899998188)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_34R" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_8>
+            )
+            {
+                rel material:binding = </Dex5_URDF_R/Looks/material_CAD1EE> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_34R" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_8_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+            }
+        }
+    }
+
+    def Xform "Link_41R" (
+        prepend apiSchemas = ["LinkAPI"]
+    )
+    {
+        string isaac:nameOverride
+        quatd xformOp:orient = (0.7071055173873901, 0, 0, 0.7071080803871155)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (-0.03400000184774399, 0.07314299792051315, -0.00347020011395216)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_41R" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_5>
+            )
+            {
+                rel material:binding = </Dex5_URDF_R/Looks/material_CAD1EE> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_41R" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_5_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+            }
+        }
+    }
+
+    def Xform "Link_42R" (
+        prepend apiSchemas = ["LinkAPI"]
+    )
+    {
+        string isaac:nameOverride
+        quatd xformOp:orient = (0.49999910593032837, 0.49999910593032837, 0.5000008940696716, 0.5000008940696716)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (-0.03400001674890518, 0.07734299451112747, -0.00347020011395216)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_42R" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_9>
+            )
+            {
+                rel material:binding = </Dex5_URDF_R/Looks/material_CAD1EE> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_42R" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_9_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+            }
+        }
+    }
+
+    def Xform "Link_43R" (
+        prepend apiSchemas = ["LinkAPI"]
+    )
+    {
+        string isaac:nameOverride
+        quatd xformOp:orient = (0.49999910593032837, 0.49999910593032837, 0.5000008940696716, 0.5000008940696716)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (-0.03400015830993652, 0.1173429936170578, -0.00347020011395216)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_43R" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_7>
+            )
+            {
+                rel material:binding = </Dex5_URDF_R/Looks/material_CAD1EE> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_43R" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_7_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+            }
+        }
+    }
+
+    def Xform "Link_44R" (
+        prepend apiSchemas = ["LinkAPI"]
+    )
+    {
+        string isaac:nameOverride
+        quatd xformOp:orient = (0.49999910593032837, 0.49999910593032837, 0.5000008940696716, 0.5000008940696716)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (-0.03400023281574249, 0.13832758367061615, -0.002665896899998188)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_44R" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_10>
+            )
+            {
+                rel material:binding = </Dex5_URDF_R/Looks/material_CAD1EE> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_44R" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_10_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+            }
+        }
+    }
+
+    def Xform "Link_51R" (
+        prepend apiSchemas = ["LinkAPI"]
+    )
+    {
+        string isaac:nameOverride
+        quatd xformOp:orient = (0.7071067690849304, 0, 0, 0.7071067690849304)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (-0.0560000017285347, 0.06914336234331131, -0.0034702164120972157)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_51R" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_5>
+            )
+            {
+                rel material:binding = </Dex5_URDF_R/Looks/material_CAD1EE> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_51R" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_5_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+            }
+        }
+    }
+
+    def Xform "Link_52R" (
+        prepend apiSchemas = ["LinkAPI"]
+    )
+    {
+        string isaac:nameOverride
+        quatd xformOp:orient = (0.4999999701976776, 0.4999999701976776, 0.4999999701976776, 0.4999999701976776)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (-0.0560000017285347, 0.07334335893392563, -0.0034702164120972157)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_52R" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_11>
+            )
+            {
+                rel material:binding = </Dex5_URDF_R/Looks/material_CAD1EE> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_52R" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_11_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+            }
+        }
+    }
+
+    def Xform "Link_53R" (
+        prepend apiSchemas = ["LinkAPI"]
+    )
+    {
+        string isaac:nameOverride
+        quatd xformOp:orient = (0.4999999701976776, 0.4999999701976776, 0.4999999701976776, 0.4999999701976776)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (-0.056000009179115295, 0.11334335058927536, -0.0034702164120972157)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_53R" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_7>
+            )
+            {
+                rel material:binding = </Dex5_URDF_R/Looks/material_CAD1EE> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_53R" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_7_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+            }
+        }
+    }
+
+    def Xform "Link_54R" (
+        prepend apiSchemas = ["LinkAPI"]
+    )
+    {
+        string isaac:nameOverride
+        quatd xformOp:orient = (0.4999999701976776, 0.4999999701976776, 0.4999999701976776, 0.4999999701976776)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (-0.056000012904405594, 0.1343279331922531, -0.002665913198143244)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_54R" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_10>
+            )
+            {
+                rel material:binding = </Dex5_URDF_R/Looks/material_CAD1EE> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_54R" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_10_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+            }
+        }
+    }
+
+    def Xform "Link_11R" (
+        prepend apiSchemas = ["LinkAPI"]
+    )
+    {
+        string isaac:nameOverride
+        quatd xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0, 0, 0.014349999837577343)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_11R" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_12>
+            )
+            {
+                rel material:binding = </Dex5_URDF_R/Looks/material_C0C0C0> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_11R" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_12_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+            }
+        }
+    }
+
+    def Xform "Link_12R" (
+        prepend apiSchemas = ["LinkAPI"]
+    )
+    {
+        string isaac:nameOverride
+        quatd xformOp:orient = (0.7071067690849304, 0.7071067690849304, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (-0.00001060410158970626, 0, 0.014349999837577343)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_12R" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_13>
+            )
+            {
+                rel material:binding = </Dex5_URDF_R/Looks/material_C0C0C0> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_12R" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_13_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+            }
+        }
+    }
+
+    def Xform "Link_13R" (
+        prepend apiSchemas = ["LinkAPI"]
+    )
+    {
+        string isaac:nameOverride
+        quatd xformOp:orient = (0.9999999403953552, 0, 0, -0.000007754193575237878)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0.03348939120769501, 0.005999999586492777, 0.014349999837577343)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_13R" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_14>
+            )
+            {
+                rel material:binding = </Dex5_URDF_R/Looks/material_C0C0C0> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_13R" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_14_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+            }
+        }
+    }
+
+    def Xform "Link_14R" (
+        prepend apiSchemas = ["LinkAPI"]
+    )
+    {
+        string isaac:nameOverride
+        quatd xformOp:orient = (0.9999999403953552, 0, 0, -0.000007754193575237878)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0.07009830325841904, 0.0006340332329273224, 0.014349999837577343)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_14R" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_15>
+            )
+            {
+                rel material:binding = </Dex5_URDF_R/Looks/material_C0C0C0> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "Link_14R" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_15_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+            }
+        }
+    }
+
+    def Scope "Looks"
+    {
+        def Material "material_C0C0C0" (
+            instanceable = true
+            prepend references = @./materials.usda@</Materials/material_C0C0C0>
+        )
+        {
+        }
+
+        def Material "material_CAD1EE" (
+            instanceable = true
+            prepend references = @./materials.usda@</Materials/material_C0C0C0>
+        )
+        {
+        }
+    }
+
+    def Scope "VisualMaterials"
+    {
+    }
+}
+

@@ -90,3 +90,8 @@ core.*
 
 # Development and cache folders
 /__*
+
+# g1d demo dev artifacts (render checks / one-off probes - the
+# check PNGs and probe scripts are regenerable, not scene sources)
+g1d_demo/_render_*.png
+g1d_demo/_probe_*.py

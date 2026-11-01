@@ -68,6 +68,7 @@ from g1d_scene import G1DSceneCfg, rotate_props
 from g1d_usd import (
     add_grip_material,
     arm_collision_hand_only,
+    attach_parallel_gripper,
     bind_object_materials,
     disable_agv_shell_collision,
     rigidify_objects,
@@ -138,13 +139,12 @@ def approach_slot(driver: G1DDriver, sx: float, sy: float, arm_hold=None) -> boo
     # early-return (x already close) ignores a bad y, and spinning
     # inside the row band clips the tabletop corners (seen: spin
     # wedged at -0.78 rad with the nose on the face)
-    if abs(by) > 0.7:
+    if abs(by) > 0.62:
         # NEVER spin at depth: the 0.86 m corner sweep cannot clear
-        # the tabletop face from any reachable standoff (reach needs
-        # base <= 0.97 from the slot line, spin safety needs >= 1.53)
-        # - reverse out along the current heading instead (the robot
-        # faces the table there, so backing = toward the corridor)
-        driver.back_straight(abs(by) - CORRIDOR_LANE + 0.1, speed=0.20, arm_hold=arm_hold, timeout=25.0)
+        # the 1.1 m table face unless |y| <= 0.67 - back only to the
+        # SPIN-CLEAR line (0.55, 9 cm margin), NOT to the far lane
+        # (user spec: small reverse, then turn and drive forward)
+        driver.back_straight(max(0.10, abs(by) - 0.55), speed=0.20, arm_hold=arm_hold, timeout=25.0)
     # corridor transit to the slot x (lane biased toward the row so
     # the final creep is short)
     if abs(driver.pose()[0] - sx) > 0.4:
@@ -170,11 +170,17 @@ def approach_slot(driver: G1DDriver, sx: float, sy: float, arm_hold=None) -> boo
 
 
 def exit_slot(driver: G1DDriver, arm_hold=None) -> None:
-    """Back ALL THE WAY to the corridor lane: any spin below |y| 0.7
-    clips the tabletop corners (0.86 m sweep vs 1.1 m face line), so
-    the next heading change must happen lane-deep."""
+    """Back a SHORT distance off the table; the caller then turns and
+    drives forward (user spec: no long reverses).
+
+    The old exit reversed 0.9+ m to the corridor lane every time.
+    The only real constraint is the spin: the 0.86 m corner sweep
+    clears the 1.1 m table face once |y| <= 0.67, so backing to
+    |y| ~0.55 (a ~0.17 m reverse from the 0.75 m standoff) is
+    enough - corridor_transit then spins and drives FORWARD."""
     by = abs(driver.pose()[1])
-    driver.back_straight(max(0.9, by - CORRIDOR_LANE + 0.15), speed=0.20, arm_hold=arm_hold, timeout=25.0)
+    if by > 0.55:
+        driver.back_straight(max(0.10, by - 0.55), speed=0.20, arm_hold=arm_hold, timeout=15.0)
 
 
 def main() -> None:
@@ -258,6 +264,10 @@ def main() -> None:
         tp_s = n(scene[nm].data.root_pos_w)[0]
         settle_z[nm] = float(tp_s[2])
         print(f"  {nm} settled ({tp_s[0]:.2f},{tp_s[1]:+.2f},{tp_s[2]:.3f})", flush=True)
+
+    # swap the three-finger hand for a parallel jaw gripper
+    # (needs settled body poses - derives palm-frame axes live)
+    attach_parallel_gripper(driver)
 
     try:
         from isaacsim.core.rendering_manager import ViewportManager

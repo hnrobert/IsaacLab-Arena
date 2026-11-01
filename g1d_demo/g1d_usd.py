@@ -369,6 +369,121 @@ def _write_box_uv(prim) -> None:
     pv.SetIndicesAttr(idx)
 
 
+def attach_parallel_gripper(driver) -> bool:
+    """Swap the three-finger hand for a REAL Robotiq 2F-85 parallel
+    gripper (user spec: a normal two-finger gripper).
+
+    The full Robotiq base.usda (base + both finger assemblies, PAD
+    OPEN pose baked) is referenced as a WORLD-SPACE prim at env
+    level and driven from the palm pose every step by
+    gripper_apply - nesting it under the articulation palm link
+    flung the robot to x=-331 even with every physics schema
+    stripped, so it must NOT touch the articulation. The Robotiq's
+    own physics schemas are stripped; the three-finger hand
+    geometry is hidden. Call AFTER sim.reset() with a settled
+    robot (palm-frame axes come from the live finger geometry).
+    """
+    import numpy as np
+    import os as _os
+
+    from g1d_driver import n, quat_rot_inv
+    from pxr import Sdf, UsdGeom
+
+    gripper_usd = _os.path.join(_os.path.dirname(WAREHOUSE), "robotiq2f85", "base.usda")
+    stage = omni.usd.get_context().get_stage()
+    names = driver.robot.data.body_names
+    palm_i = names.index("right_hand_palm_link")
+    th_i = names.index("right_hand_thumb_2_link")
+    md_i = names.index("right_hand_middle_1_link")
+    pos = n(driver.robot.data.body_pos_w)[0]
+    quats = n(driver.robot.data.body_quat_w)[0]
+    palm_p = np.array(pos[palm_i])
+    palm_q = np.array(quats[palm_i])
+    fwd = np.array(pos[md_i]) - palm_p  # palm -> fingertips
+    lat = np.array(pos[th_i]) - np.array(pos[md_i])  # jaw axis
+    fwd = fwd / np.linalg.norm(fwd)
+    lat = lat - fwd * float(np.dot(lat, fwd))
+    lat = lat / np.linalg.norm(lat)
+    f_loc = np.array(quat_rot_inv(palm_q.tolist(), fwd.tolist()))
+    l_loc = np.array(quat_rot_inv(palm_q.tolist(), lat.tolist()))
+
+    # hide the three-finger GEOMETRY (visual only)
+    hidden = 0
+    for p in stage.Traverse():
+        nm = p.GetName()
+        path = str(p.GetPath())
+        if "/Robot/" not in path or not nm.startswith("right_hand_"):
+            continue
+        rest = nm[len("right_hand_") :]
+        if rest.startswith(("thumb", "middle", "index")):
+            UsdGeom.Imageable(p).CreateVisibilityAttr("invisible")
+            hidden += 1
+
+    if not _os.path.isfile(gripper_usd):
+        print("gripper: Robotiq asset missing, hand left as-is", flush=True)
+        return False
+    prim = stage.DefinePrim("/World/envs/env_0/GripperHand", "Xform")
+    prim.GetReferences().AddReference(gripper_usd)
+    xfo = UsdGeom.Xformable(prim)
+    t_op = xfo.AddTranslateOp()
+    o_op = xfo.AddOrientOp()
+    # strip EVERY physics schema in the referenced subtree: nested
+    # bodies/colliders under nothing would still fight the solver
+    for p in stage.Traverse():
+        path = str(p.GetPath())
+        if not path.startswith("/World/envs/env_0/GripperHand"):
+            continue
+        lop = p.GetMetadata("apiSchemas")
+        items = list(lop.GetAddedOrExplicitItems()) if lop else []
+        keep = [s for s in items if not (str(s).startswith("Physics") or str(s).startswith("Physx"))]
+        if keep != items:
+            op = Sdf.TokenListOp()
+            op.explicitItems = keep
+            p.SetMetadata("apiSchemas", op)
+    driver._gripper = {
+        "palm_i": palm_i,
+        "f_loc": f_loc,
+        "l_loc": l_loc,
+        "ops": ((t_op, o_op),),
+        "world": True,  # world-space graft: pose driven per step
+    }
+    gripper_apply(driver)
+    print(
+        f"gripper grafted: Robotiq 2F-85 mounted ({hidden} finger meshes hidden)",
+        flush=True,
+    )
+    return True
+
+
+def gripper_apply(driver) -> None:
+    """Pose the gripper from the palm every step (world-space graft).
+    The Robotiq base frame points its fingers along local -Z with
+    the palm coupling flange at the origin - mount it so -Z aligns
+    with the palm-forward axis (a 180-deg X flip from the palm
+    orientation)."""
+    g = getattr(driver, "_gripper", None)
+    if g is None:
+        return
+    import numpy as np
+
+    from g1d_driver import n, quat_mul, quat_rot
+    from pxr import Gf
+
+    pos = n(driver.robot.data.body_pos_w)[0]
+    quats = n(driver.robot.data.body_quat_w)[0]
+    palm_p = np.array(pos[g["palm_i"]])
+    palm_q = np.array(quats[g["palm_i"]])
+    fwd = np.array(quat_rot(palm_q.tolist(), g["f_loc"].tolist()))
+    base = palm_p + fwd * 0.05
+    # gripper quat = palm quat * rot(X, pi)  (xyzw math)
+    flip = (0.0, 1.0, 0.0, 0.0)
+    q = quat_mul(palm_q.tolist(), flip)
+    q_wxyz = (float(q[3]), float(q[0]), float(q[1]), float(q[2]))
+    (t_op, o_op) = g["ops"][0]
+    t_op.Set(Gf.Vec3d(float(base[0]), float(base[1]), float(base[2])))
+    o_op.Set(Gf.Quatf(*q_wxyz))
+
+
 def add_grip_material(env_ns="/World/envs/env_0") -> None:
     """High-friction physics material on fingertips + totes.
 

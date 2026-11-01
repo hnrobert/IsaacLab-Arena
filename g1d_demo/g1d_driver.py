@@ -122,9 +122,11 @@ class G1DDriver:
         self.totes = list(totes) if totes else []
         self._last_right_pose = ARM_HOME.tolist()
         # kinematic vacuum state: _attach = held tote record,
-        # _capture = (tote, radius) proximity watch
+        # _capture = (tote, radius) proximity watch; _gripper holds
+        # the parallel-jaw graft state (None until attached)
         self._attach = None
         self._capture = None
+        self._gripper = None
 
     # ---- outputs ----
 
@@ -275,6 +277,10 @@ class G1DDriver:
             t.update(self.sim.get_physics_dt())
         self._check_capture()
         self._apply_attach()
+        if self._gripper is not None:
+            from g1d_usd import gripper_apply
+
+            gripper_apply(self)
 
     def run_seconds(self, seconds: float, every_step=None) -> None:
         steps = int(seconds / self.sim.get_physics_dt())
