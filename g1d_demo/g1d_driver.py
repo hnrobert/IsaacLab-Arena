@@ -215,10 +215,12 @@ class G1DDriver:
         target = target + np.array([0.0, 0.0, grab_up])
         target = target + left * SNAP_SHIFT_LEFT - fwd * SNAP_SHIFT_BACK
         rel_p = np.array(quat_rot_inv(quats[link_i], target - pos[link_i]))
-        # box quat in the PALM frame: palm_q * rel_q reproduces the
-        # box's world quat at attach and follows the palm after
-        pq = quats[link_i]
-        rel_q = quat_mul((-pq[0], -pq[1], -pq[2], pq[3]), n(tote.data.root_quat_w)[0])
+        # carried orientation: WORLD-FIXED. The earlier palm-composed
+        # rotate (palm_q * rel_q) carried the mug mouth-DOWN once
+        # the palm leveled - a gripper holds a cup UPRIGHT; position
+        # still follows the palm rigidly, only the orientation is
+        # held level (user report: 倒置)
+        rel_q = n(tote.data.root_quat_w)[0].copy()
         self._attach = {
             "tote": tote,
             "link_i": link_i,
@@ -262,8 +264,9 @@ class G1DDriver:
         pos = n(self.robot.data.body_pos_w)[0]
         hq = n(self.robot.data.body_quat_w)[0][a["link_i"]]
         tgt = np.array(pos[a["link_i"]]) + np.array(quat_rot(hq, a["rel_p"]))
-        # recompose the orientation WITH the palm (xyzw out)
-        q = quat_mul(hq, a["rel_q"])
+        # world-fixed carried orientation (see attach): write the
+        # captured world quat directly, no palm compose
+        q = a["rel_q"]
         pose = torch.tensor([[tgt[0], tgt[1], tgt[2], q[0], q[1], q[2], q[3]]], dtype=torch.float32, device=tote.device)
         vel = torch.zeros((1, 6), dtype=torch.float32, device=tote.device)
         tote.write_root_pose_to_sim(pose)

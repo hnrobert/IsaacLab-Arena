@@ -343,6 +343,9 @@ def _write_box_uv(prim) -> None:
     from pxr import Sdf, UsdGeom
 
     mesh = UsdGeom.Mesh(prim)
+    existing = UsdGeom.PrimvarsAPI(prim).GetPrimvar("st")
+    if existing.IsDefined():
+        return  # authored UVs win (SimReady meshes ship proper st)
     pts = mesh.GetPointsAttr().Get()
     fvi = mesh.GetFaceVertexIndicesAttr().Get()
     if not pts or not fvi:
