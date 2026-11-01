@@ -5,19 +5,21 @@ import os
 import isaaclab.sim as sim_utils
 import omni.usd
 from g1d_config import (
+    DRESSING_TABLES,
     G1D_USD,
     HALL_X,
     HALL_Y,
     HOME_ROOT_Z,
     OBJECT_CATALOG,
+    OBJECT_FINISH,
+    OBJECT_FINISH_DEFAULT,
     OBJECT_NAMES,
     OBJECT_ORDER,
-    RACK_Y,
+    RACK_ROWS,
     STOCKED_TABLES,
     TABLE_POS,
     TABLE_SIZE,
     TABLE_TOP,
-    TOTE_SIZE,
     WAREHOUSE,
     WHEEL_JOINTS,
     table_slot,
@@ -83,18 +85,23 @@ def _centers(half, step):
 
 
 def build_tables():
-    """12 work tables: a top slab plus four legs each, as spawn cfgs."""
+    """12 work tables + the dressing tables: a top slab plus four
+    legs each, as spawn cfgs."""
     cfgs = []
     tx_len, ty_len, t_thick = TABLE_SIZE
     leg_h = TABLE_TOP - t_thick
-    for ti, (cx, cy) in enumerate(TABLE_POS):
+    positions = [(ti, cx, cy) for ti, (cx, cy) in enumerate(TABLE_POS)]
+    positions += [(len(TABLE_POS) + i, cx, cy) for i, (cx, cy) in enumerate(DRESSING_TABLES)]
+    for ti, cx, cy in positions:
         cfgs.append(
             AssetBaseCfg(
                 prim_path=f"{{ENV_REGEX_NS}}/Table{ti:02d}",
                 spawn=sim_utils.CuboidCfg(
                     size=(tx_len, ty_len, t_thick),
                     collision_props=sim_utils.CollisionPropertiesCfg(),
-                    visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=TABLE_COLOR),
+                    visual_material=sim_utils.PreviewSurfaceCfg(
+                        diffuse_color=TABLE_COLOR, roughness=0.55, metallic=0.05
+                    ),
                 ),
                 init_state=AssetBaseCfg.InitialStateCfg(pos=(cx, cy, TABLE_TOP - t_thick / 2)),
             )
@@ -121,27 +128,46 @@ def build_tables():
 
 
 def make_object_cfg(name: str, obj_type: str, pos):
-    """One pickable object at `pos` - a kit USD prop or a cuboid tote."""
-    usd_path, color, _grab, mass = OBJECT_CATALOG[obj_type]
+    """One pickable object at `pos` - a kit/ArtVIP USD prop or a
+    generated primitive (cube/sphere/cylinder challenge props)."""
+    usd_path, shape, _grab, mass = OBJECT_CATALOG[obj_type]
+    metallic, roughness = OBJECT_FINISH.get(obj_type, OBJECT_FINISH_DEFAULT)
     if usd_path:
         spawn = sim_utils.UsdFileCfg(
             usd_path=usd_path,
             rigid_props=sim_utils.RigidBodyPropertiesCfg(),
             collision_props=sim_utils.CollisionPropertiesCfg(),
         )
-    else:
+    elif shape[0] == "cube":
         spawn = sim_utils.CuboidCfg(
-            size=(TOTE_SIZE, TOTE_SIZE, TOTE_SIZE),
+            size=shape[1],
             rigid_props=sim_utils.RigidBodyPropertiesCfg(),
             mass_props=sim_utils.MassPropertiesCfg(mass=mass),
             collision_props=sim_utils.CollisionPropertiesCfg(),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=color),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=shape[2], metallic=metallic, roughness=roughness),
+        )
+    elif shape[0] == "sphere":
+        spawn = sim_utils.SphereCfg(
+            radius=shape[1] / 2.0,
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(),
+            mass_props=sim_utils.MassPropertiesCfg(mass=mass),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=shape[2], metallic=metallic, roughness=roughness),
+        )
+    else:  # cyl
+        spawn = sim_utils.CylinderCfg(
+            radius=shape[1],
+            height=shape[2],
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(),
+            mass_props=sim_utils.MassPropertiesCfg(mass=mass),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=shape[3], metallic=metallic, roughness=roughness),
         )
     return RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/" + name,
         spawn=spawn,
-        # spawn 0.25 m above the table and let it settle - the kit
-        # prop origins/heights vary, so a drop-in beats guessing z
+        # spawn above the table and let it settle - prop origins and
+        # primitive anchor points vary, so a drop-in beats guessing z
         init_state=RigidObjectCfg.InitialStateCfg(pos=(pos[0], pos[1], TABLE_TOP + 0.25)),
     )
 
@@ -166,17 +192,43 @@ def build_warehouse_props():
     for x in (HALL_X, -HALL_X):
         for y in _centers(HALL_Y, 3.0):
             props.append(usd_prop_cfg(prop("SM_WallA_3M"), (x, y, 0.0)))
-    # pallet racking in the far north/south bands (outside the table
-    # rows): uprights sit at their FOOT (origin z 0..3), shelves ride
-    # the beams (origin mid-slab). 5 m bay pitch tiles the 40 m span.
-    for y_r in (RACK_Y, -RACK_Y):
-        for x_c in _centers(HALL_X - 4.0, 5.0):
+    # THREE parallel rack rows per side (y +-5/+-8/+-12, user
+    # spec): uprights sit at their FOOT (origin z 0..3), shelves
+    # ride the beams (origin mid-slab). 5 m bay pitch tiles the
+    # 40 m span; tables end at +-2.9 so the inner row keeps a
+    # 1.6 m walk gap. Goods sit in EVEN rows on the shelf levels
+    # (user spec: neat, tabletop/shelf placement, unreachable
+    # spots fine) - box types cycle per bay for variety
+    _bay_goods = ("SM_CardBoxA_01", "SM_CardBoxB_01", "SM_CardBoxC_01", "SM_CardBoxA_02", "SM_CardBoxD_01")
+    for y_r in [s * r for r in RACK_ROWS for s in (1.0, -1.0)]:
+        for bi, x_c in enumerate(_centers(HALL_X - 4.0, 5.0)):
             for z_lvl in (0.35, 1.45):
                 props.append(usd_prop_cfg(prop("SM_RackShelf_01"), (x_c, y_r, z_lvl)))
             for x_e in (x_c - 2.0, x_c + 2.0):
                 props.append(usd_prop_cfg(prop("SM_RackFrame_03"), (x_e, y_r, 0.0)))
             props.append(usd_prop_cfg(prop("SM_RackPile_03"), (x_c - 1.2, y_r, 0.40)))
             props.append(usd_prop_cfg(prop("SM_RackPile_04"), (x_c + 0.9, y_r, 0.42)))
+            # even box rows: two per bay on the LOWER shelf top
+            # (0.38) beside the piles, three on the UPPER (1.48,
+            # above the robot's reach - pure set dressing)
+            g0 = _bay_goods[bi % len(_bay_goods)]
+            g1 = _bay_goods[(bi + 2) % len(_bay_goods)]
+            for gx, gn in ((x_c - 0.35, g0), (x_c + 0.35, g1)):
+                props.append(usd_prop_cfg(prop(gn), (gx, y_r, 0.38)))
+            for gx, gn in ((x_c - 1.0, g1), (x_c, g0), (x_c + 1.0, g1)):
+                props.append(usd_prop_cfg(prop(gn), (gx, y_r, 1.48)))
+    # static boxes on the OUTER (far) half of every work table -
+    # the pick/drop slots and the robot's hover zone are all on the
+    # corridor-facing edge, so the far side is dead space (user
+    # spec: more boxes where nothing gets placed). Mirrors of the
+    # slot offsets, small types so they clear the tabletop edge.
+    _dead_goods = ("SM_CardBoxB_01", "SM_CardBoxA_02", "SM_CardBoxC_01")
+    for ti, (tx, ty) in enumerate(TABLE_POS):
+        outward = 1.0 if ty >= 0 else -1.0  # away from the corridor
+        for k, dx in enumerate((-0.22, 0.22)):
+            props.append(
+                usd_prop_cfg(prop(_dead_goods[(ti + k) % len(_dead_goods)]), (tx + dx, ty + outward * 0.55, TABLE_TOP))
+            )
     # traffic furniture OUT of the center corridor (the transit lane
     # is |y| < 0.8; tables occupy 0.8..1.7) - beside the table rows
     props.append(usd_prop_cfg(prop("S_TrafficCone"), (-2.5, 2.8, 0.0)))
@@ -184,6 +236,26 @@ def build_warehouse_props():
     # S_AisleSign's origin is CENTERED (local z -0.39..0.39) - lift
     # it half its height or it sits half-buried
     props.append(usd_prop_cfg(prop("S_AisleSign"), (-4.5, 3.2, 0.39), rot_z=180.0))
+    # goods on the east dressing tables in a neat 2x2 grid per
+    # table (user spec: evenly arranged, on tabletops) - cycling
+    # types per table for variety
+    _grid_goods = (
+        ("SM_CardBoxA_01", "SM_CardBoxB_01"),
+        ("SM_CratePlastic_A_01", "SM_CardBoxC_01"),
+        ("SM_CardBoxD_01", "SM_CardBoxA_02"),
+        ("SM_CardBoxB_01", "SM_CratePlastic_A_01"),
+    )
+    for ti, (cx, cy) in enumerate(DRESSING_TABLES):
+        ga, gb = _grid_goods[ti % len(_grid_goods)]
+        for gx, gn in ((cx - 0.28, ga), (cx + 0.28, gb)):
+            props.append(usd_prop_cfg(prop(gn), (gx, cy - 0.32, TABLE_TOP)))
+            props.append(usd_prop_cfg(prop(gn), (gx, cy + 0.32, TABLE_TOP)))
+    # neat palletized stacks in both far corners (pallet + one
+    # centered box each; the scattered floor clusters were removed
+    # - user spec: tidy)
+    for px, py in ((20.0, 4.0), (-21.5, 5.5), (-21.6, -6.2), (20.4, -4.5)):
+        props.append(usd_prop_cfg(prop("SM_PaletteA_02"), (px, py, 0.0)))
+        props.append(usd_prop_cfg(prop("SM_CardBoxA_01"), (px, py, 0.21)))
     return props
 
 

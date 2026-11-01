@@ -85,7 +85,7 @@ FINGER_CRADLE = 0.35  # fraction of FINGER_CLOSE for the carry wrap
 # height, with no press-down before or after the snap (at 0.25
 # the off-center slots only attached at dip depth, and the arm
 # sat IN the pressed pose at the moment of the teleport)
-SNAP_RADIUS = 0.30
+SNAP_RADIUS = 0.36
 # x along the middle-finger link: 0.30 floated the box a hand-
 # length past the jaw, 0.08 still left it ahead of the fingertips
 # (user: one box edge closer to the body) - -0.02 pulls it a full
@@ -145,6 +145,9 @@ CORRIDOR_LANE = 0.3  # transit lane |y| (corridor floor is |y| < 1.1)
 # half the tables stocked, the other half are delivery targets
 # -> 12 pick+place tasks per cycle
 STOCKED_TABLES = (0, 2, 4, 6, 8, 10)
+# DRESSING tables (east workplace zone): no tasks, just goods on
+# top - makes the hall read like a working floor (user spec)
+DRESSING_TABLES = ((6.0, 3.0), (10.0, 3.2), (6.0, -3.0), (12.0, -3.4))
 TOTE_SIZE = 0.12  # cuboid tote edge
 
 
@@ -158,10 +161,11 @@ def table_slot(table_idx: int, slot_idx: int):
 
 
 # --- object catalog ----------------------------------------------------
-# name -> (usd path or None for a cuboid tote, tote color, GRAB_UP,
-# mass kg). GRAB_UP = how far above the SEED point the palm grabs:
-# for the crate it is the HANDLE (the basket hangs below the palm),
-# for card boxes roughly the box top, for totes the tuned value.
+# name -> (usd path or None, shape spec, GRAB_UP, mass kg).
+# shape spec: None (usd prop) | ("cube", (dx,dy,dz), rgb)
+#            | ("sphere", diameter, rgb) | ("cyl", radius, height, rgb)
+# GRAB_UP = how far above the SEED point the palm grabs (crate =
+# its HANDLE high so the basket hangs below the palm)
 
 
 def _prop(name):
@@ -175,14 +179,31 @@ def _av(*parts):
     return os.path.join(ARTVIP, *parts)
 
 
+RED = (0.85, 0.15, 0.12)
+GREEN = (0.2, 0.75, 0.25)
+ORANGE = (0.95, 0.55, 0.1)
+BLUE = (0.15, 0.4, 0.85)
+WHITE = (0.92, 0.9, 0.86)
+
 OBJECT_CATALOG = {
+    # warehouse kit props
     "crate": (_prop("SM_CratePlastic_A_01"), None, 0.34, 0.5),
     "card_a": (_prop("SM_CardBoxA_01"), None, 0.22, 0.4),
     "card_b": (_prop("SM_CardBoxB_01"), None, 0.18, 0.3),
     "card_c": (_prop("SM_CardBoxC_01"), None, 0.26, 0.5),
     "card_d": (_prop("SM_CardBoxD_01"), None, 0.30, 0.6),
-    "tote_y": (None, (0.95, 0.80, 0.20), 0.10, 0.15),
-    "tote_g": (None, (0.2, 0.8, 0.3), 0.10, 0.15),
+    # generated shapes (UniBot-V1 challenge task props)
+    "cup_r": (None, ("cyl", 0.035, 0.10, RED), 0.09, 0.08),
+    "cup_b": (None, ("cyl", 0.035, 0.10, BLUE), 0.09, 0.08),
+    "apple": (None, ("sphere", 0.08, RED), 0.07, 0.10),
+    "orange": (None, ("sphere", 0.075, ORANGE), 0.07, 0.09),
+    "lime": (None, ("sphere", 0.065, GREEN), 0.06, 0.07),
+    "book_r": (None, ("cube", (0.19, 0.13, 0.035), RED), 0.05, 0.30),
+    "book_g": (None, ("cube", (0.19, 0.13, 0.035), GREEN), 0.05, 0.30),
+    "towel_w": (None, ("cube", (0.28, 0.28, 0.025), WHITE), 0.05, 0.15),
+    "battery": (None, ("cyl", 0.014, 0.05, (0.3, 0.3, 0.32)), 0.05, 0.03),
+    "tote_y": (None, ("cube", (TOTE_SIZE, TOTE_SIZE, TOTE_SIZE), (0.95, 0.80, 0.20)), 0.10, 0.15),
+    "tote_g": (None, ("cube", (TOTE_SIZE, TOTE_SIZE, TOTE_SIZE), GREEN), 0.10, 0.15),
     # ArtVIP (huggingface X-Humanoid/ArtVIP) articulated digital
     # twins - rigidified whole (single box collider) for the snap
     # grasp; the basket is the true "grab the handle" object
@@ -191,20 +212,75 @@ OBJECT_CATALOG = {
     "av_trash": (_av("trash_can", "model.usd"), None, 0.35, 1.0),
     "av_pump": (_av("pump_bottle", "model.usd"), None, 0.18, 0.3),
     "av_carton": (_av("cardboard_box", "model.usda"), None, 0.15, 0.4),
+    # SMALL ArtVIP props (a few cm - grasp whole, no tipping, real
+    # textures): clock, stapler, notebook, matchbox
+    "av_clock": (_av("clock001", "model_clock_001.usd"), None, 0.08, 0.15),
+    "av_stapler": (_av("stapler", "model_stapler_1.usd"), None, 0.05, 0.10),
+    "av_notebook": (_av("notebook", "model_notebook_0.usd"), None, 0.04, 0.20),
+    "av_match": (_av("match", "model_match.usd"), None, 0.04, 0.05),
 }
-# which object sits on each of the 12 stocked slots (in task order)
-OBJECT_ORDER = (
-    "av_basket",
-    "crate",
-    "tote_y",
-    "card_a",
-    "card_c",
-    "tote_g",
-    "card_d",
-    "av_basket",
-    "av_carton",
-    "card_b",
-    "tote_y",
-    "av_trash",
+# The 6 stocked tables are THEMED after UniBot-V1 challenge tasks
+# (ref: hnrobert-unibot-world-challenge ref/tasks-detail); each entry
+# = (theme label, slot0 object, slot1 object)
+# all pickable objects come from the KIT ASSET LIBRARY (user
+# spec): the kit props carry MDL PBR textures so every picked
+# object renders textured - the generated primitives render flat
+# small ArtVIP props only (user spec: NOT the big boxes - the
+# 0.5 m kit boxes tipped over at every approach and their drops
+# bounced ~1 m off the slots)
+# REVERTED to the small generated primitives: the small ArtVIP
+# props (stapler/match) rigidify with correct bboxes but their
+# physics bodies IGNORE write_root_pose_to_sim entirely (3 retry
+# rounds, stuck at the stage origin - the RigidObject view resolves
+# to a different body than the prim we write), and the trash_can
+# accepts the teleport but its BoxCol falls through. Both stay in
+# the catalog; blocked on body resolution (see memory notes)
+TABLE_THEMES = (
+    ("T01 挂杯子 HangCup", "cup_r", "cup_b"),
+    ("T04 水果分类 FruitSort", "apple", "orange"),
+    ("T08 整理书架 Bookshelf", "book_r", "book_g"),
+    ("T09 工具箱收纳 ToolStorage", "crate", "card_d"),
+    ("T02 水果收集 FruitCollect", "crate", "lime"),
+    ("T16 叠毛巾 TowelFold", "towel_w", "tote_y"),
 )
+OBJECT_ORDER = tuple(obj for _theme, o0, o1 in TABLE_THEMES for obj in (o0, o1))
 OBJECT_NAMES = tuple(f"obj_{i:02d}" for i in range(len(OBJECT_ORDER)))
+
+# per-type surface finish (metallic, roughness) for the generated
+# primitives - flat toy colors read as fake; metals shine, paper
+# and fabric stay matte (kit USD props already carry MDL PBR)
+OBJECT_FINISH = {
+    "cup_r": (0.85, 0.25),  # enamel mug
+    "cup_b": (0.85, 0.25),
+    "apple": (0.0, 0.30),  # glossy fruit skin
+    "orange": (0.0, 0.30),
+    "lime": (0.0, 0.30),
+    "book_r": (0.0, 0.80),  # matte paper cover
+    "book_g": (0.0, 0.80),
+    "towel_w": (0.0, 0.95),  # fabric
+    "battery": (0.75, 0.35),  # steel shell
+    "tote_y": (0.0, 0.50),  # plastic bin
+    "tote_g": (0.0, 0.50),
+}
+OBJECT_FINISH_DEFAULT = (0.0, 0.5)
+
+# per-type TEXTURE for the generated primitives (png, roughness,
+# metallic) - g1d_make_object_textures.py output; a plain color
+# renders flat, a texture reads as a real material (user spec)
+OBJECT_TEXTURE = {
+    "cup_r": ("metal.png", 0.25, 0.85),
+    "cup_b": ("metal.png", 0.25, 0.85),
+    "apple": ("apple_red.png", 0.30, 0.0),
+    "orange": ("orange.png", 0.30, 0.0),
+    "lime": ("lime_green.png", 0.30, 0.0),
+    "book_r": ("paper.png", 0.80, 0.0),
+    "book_g": ("paper.png", 0.80, 0.0),
+    "towel_w": ("fabric.png", 0.95, 0.0),
+    "battery": ("metal.png", 0.35, 0.75),
+    "tote_y": ("plastic_yellow.png", 0.50, 0.0),
+    "tote_g": ("plastic_blue.png", 0.50, 0.0),
+}
+# parallel rack rows flanking both sides of the work aisle: the
+# hall is 30 m wide (walls +-15), tables end at +-2.9, so three
+# rows per side at +-5/+-8/+-12 tile cleanly with walk gaps
+RACK_ROWS = (5.0, 8.0, 12.0)

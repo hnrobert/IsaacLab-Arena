@@ -3,7 +3,7 @@
 import os
 
 import omni.usd
-from g1d_config import OBJECT_CATALOG, OBJECT_NAMES, OBJECT_ORDER, WAREHOUSE
+from g1d_config import OBJECT_CATALOG, OBJECT_NAMES, OBJECT_ORDER, OBJECT_TEXTURE, WAREHOUSE
 
 
 def select_physx_variant(robot_prim_path: str) -> None:
@@ -71,6 +71,21 @@ def rigidify_objects(env_ns: str = "/World/envs/env_0") -> int:
         Phys.RigidBodyAPI.Apply(root)
         Phys.MassAPI.Apply(root)
         Phys.MassAPI(root).CreateMassAttr(mass)
+        # ArtVIP bodies initialize at the STAGE ORIGIN regardless of
+        # the spawn translate (seen: every ArtVIP prop reads
+        # (0,0,0) after reset) - explicitly write the slot position
+        # onto the root xform so the body composes in place
+        from g1d_config import STOCKED_TABLES as _ST
+        from g1d_config import TABLE_TOP as _TT
+        from g1d_config import table_slot as _slot
+
+        i_obj = OBJECT_NAMES.index(nm)
+        sx, sy = _slot(_ST[i_obj // 2], i_obj % 2)
+        xo = UsdGeom.Xformable(root)
+        t_op = xo.GetTranslateOp()
+        if t_op is None:
+            t_op = xo.AddTranslateOp()
+        t_op.Set(Gf.Vec3d(sx, sy, _TT + 0.25))
         root_xo = UsdGeom.Xformable(root)
         root_t = Gf.Vec3d(0.0)
         t_op = root_xo.GetTranslateOp()
@@ -90,7 +105,6 @@ def rigidify_objects(env_ns: str = "/World/envs/env_0") -> int:
         cube.CreateVisibilityAttr("invisible")
         Phys.CollisionAPI.Apply(cube.GetPrim())
         print(f"  {nm} box col {size[0]:.2f}x{size[1]:.2f}x{size[2]:.2f} @{mid}", flush=True)
-        n += 1
         n += 1
     print(f"rigidified {n} objects", flush=True)
     return n
@@ -230,6 +244,73 @@ def bind_placeholder_materials(env_ns="/World/envs/env_0"):
                 UsdShade.MaterialBindingAPI.Apply(prim).Bind(mat, UsdShade.Tokens.weakerThanDescendants)
                 bound += 1
     print(f"placeholder materials bound to {bound} meshes", flush=True)
+
+
+def bind_object_materials(env_ns: str = "/World/envs/env_0") -> int:
+    """Bind textured PreviewSurface networks to the generated
+    primitives (cups/spheres/books/towels/totes).
+
+    A plain diffuse_color renders FLAT in RTX (user report); a
+    UsdUVTexture-driven PreviewSurface gives a real material look -
+    same proven pattern as bind_placeholder_materials. Textures
+    from g1d_make_object_textures.py; per-type assignment via
+    OBJECT_TEXTURE in the config. Kit/ArtVIP USD props keep their
+    own materials. The IsaacLab shape spawners create the gprim AT
+    the object root (Cube/Sphere/Cylinder typed), so the material
+    binds to the root prim itself.
+    """
+    from pxr import Sdf, UsdShade
+
+    texdir = os.path.join(os.path.dirname(WAREHOUSE), "materials")
+
+    def preview_material(stage, path, diffuse_png, roughness, metallic):
+        mat = UsdShade.Material.Define(stage, path)
+        shader = UsdShade.Shader.Define(stage, path + "/PreviewSurface")
+        shader.CreateIdAttr("UsdPreviewSurface")
+        shader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(roughness)
+        shader.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(metallic)
+        tex_node = UsdShade.Shader.Define(stage, path + "/DiffuseTex")
+        tex_node.CreateIdAttr("UsdUVTexture")
+        tex_node.CreateInput("file", Sdf.ValueTypeNames.Asset).Set(diffuse_png)
+        tex_node.CreateInput("sourceColorSpace", Sdf.ValueTypeNames.Token).Set("sRGB")
+        tex_node.CreateInput("wrapS", Sdf.ValueTypeNames.Token).Set("repeat")
+        tex_node.CreateInput("wrapT", Sdf.ValueTypeNames.Token).Set("repeat")
+        tex_node.CreateOutput("rgb", Sdf.ValueTypeNames.Float3)
+        reader = UsdShade.Shader.Define(stage, path + "/UVReader")
+        reader.CreateIdAttr("UsdPrimvarReader_float2")
+        reader.CreateInput("varname", Sdf.ValueTypeNames.String).Set("st")
+        reader.CreateOutput("result", Sdf.ValueTypeNames.Float2)
+        tex_node.CreateInput("st", Sdf.ValueTypeNames.Float2).ConnectToSource(reader.ConnectableAPI(), "result")
+        shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).ConnectToSource(tex_node.ConnectableAPI(), "rgb")
+        mat.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), "surface")
+        return mat
+
+    stage = omni.usd.get_context().get_stage()
+    # one shared material per (texture, finish) combo
+    cache = {}
+    bound = 0
+    for nm in OBJECT_NAMES:
+        obj_type = _obj_type(nm)
+        spec = OBJECT_TEXTURE.get(obj_type)
+        if spec is None:
+            continue  # USD props carry their own materials
+        png, rough, metal = spec
+        key = (png, rough, metal)
+        if key not in cache:
+            cache[key] = preview_material(
+                stage,
+                f"{env_ns}/ObjectMaterials/{obj_type}",
+                os.path.join(texdir, png),
+                rough,
+                metal,
+            )
+        root = stage.GetPrimAtPath(f"{env_ns}/{nm}")
+        if not root:
+            continue
+        UsdShade.MaterialBindingAPI.Apply(root).Bind(cache[key], UsdShade.Tokens.weakerThanDescendants)
+        bound += 1
+    print(f"object materials bound to {bound} prims", flush=True)
+    return bound
 
 
 def add_grip_material(env_ns="/World/envs/env_0") -> None:

@@ -23,7 +23,8 @@ simulation_app = app_launcher.app
 """Now the sim is alive."""
 
 import isaaclab.sim as sim_utils
-from g1d_scene import build_warehouse_props, rotate_props
+from g1d_config import OBJECT_NAMES, OBJECT_ORDER, STOCKED_TABLES, table_slot
+from g1d_scene import build_tables, build_warehouse_props, make_object_cfg, rotate_props
 from g1d_usd import bind_placeholder_materials
 from isaaclab.assets import AssetBaseCfg
 from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
@@ -84,8 +85,11 @@ class CheckSceneCfg(InteractiveSceneCfg):
         data_types=["rgb"],
         spawn=sim_utils.PinholeCameraCfg(focal_length=24.0),
         offset=CameraCfg.OffsetCfg(
-            pos=(0.4, -2.7, 1.1),
-            rot=lookat_quat_xyzw((0.4, -2.7, 1.1), (0.4, -1.25, 0.25)),
+            # down the corridor at tabletop height: shows the work
+            # tables (stocked slots face the corridor) and the rack
+            # rows beyond them on both sides
+            pos=(-11.5, 0.0, 1.35),
+            rot=lookat_quat_xyzw((-11.5, 0.0, 1.35), (-15.0, 0.0, 0.8)),
             convention="opengl",
         ),
     )
@@ -93,9 +97,16 @@ class CheckSceneCfg(InteractiveSceneCfg):
 
 def main() -> None:
     sim = SimulationContext(SimulationCfg(dt=1.0 / 60, device="cpu"))
-    # the full hall dressing, attached like G1DSceneCfg does
+    # the full hall dressing + the work tables and their stocked
+    # objects (no rigidify/settle here - objects render at spawn
+    # height, close enough for a look check), attached like
+    # G1DSceneCfg does
     for i, cfg in enumerate(build_warehouse_props()):
         setattr(CheckSceneCfg, f"wh_prop_{i:02d}", cfg)
+    for i, cfg in enumerate(build_tables()):
+        setattr(CheckSceneCfg, f"table_{i:02d}", cfg)
+    for i, nm in enumerate(OBJECT_NAMES):
+        setattr(CheckSceneCfg, nm, make_object_cfg(nm, OBJECT_ORDER[i], table_slot(STOCKED_TABLES[i // 2], i % 2)))
     scene = InteractiveScene(CheckSceneCfg(num_envs=1, env_spacing=0.0))
     rotate_props()  # apply the recorded wall/prop yaw rotations
     bind_placeholder_materials()
