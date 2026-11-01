@@ -40,8 +40,6 @@ def rigidify_objects(env_ns: str = "/World/envs/env_0") -> int:
         if not root:
             print(f"rigidify: no prim at {env_ns}/{nm}", flush=True)
             continue
-        if not root.HasAPI(Phys.RigidBodyAPI):
-            Phys.RigidBodyAPI.Apply(root)
         # de-instance: UsdFileCfg spawns kit props as INSTANCED
         # references ("/World/template/obj_xx/proto_asset_0"), and
         # write_root_pose_to_sim on an instanced body silently does
@@ -52,14 +50,27 @@ def rigidify_objects(env_ns: str = "/World/envs/env_0") -> int:
         if usd_path is None:  # cuboid totes already collide fine
             n += 1
             continue
-        Phys.MassAPI.Apply(root)
-        Phys.MassAPI(root).CreateMassAttr(mass)
-        # disable every stock mesh collider under the object, and
-        # measure the visual bbox for the box collider size/offset
+        # strip every PHYSICS schema from the whole subtree FIRST:
+        # ArtVIP models are articulated twins carrying multiple
+        # RigidBodyAPI links - RigidObjectCfg demands exactly ONE
+        # root rigid body. Only the root RigidBody (re-applied
+        # below) + our BoxCol cube survive.
         for p in stage.Traverse():
             path = str(p.GetPath())
-            if path.startswith(f"{env_ns}/{nm}/") and p.HasAPI(Phys.CollisionAPI):
-                Phys.CollisionAPI(p).CreateCollisionEnabledAttr(False)
+            if path != f"{env_ns}/{nm}" and not path.startswith(f"{env_ns}/{nm}/"):
+                continue
+            lop = p.GetMetadata("apiSchemas")  # Sdf.TokenListOp
+            items = list(lop.GetAddedOrExplicitItems()) if lop else []
+            keep = [s for s in items if not (str(s).startswith("Physics") or str(s).startswith("Physx"))]
+            if keep != items:
+                from pxr import Sdf
+
+                op = Sdf.TokenListOp()
+                op.explicitItems = keep
+                p.SetMetadata("apiSchemas", op)
+        Phys.RigidBodyAPI.Apply(root)
+        Phys.MassAPI.Apply(root)
+        Phys.MassAPI(root).CreateMassAttr(mass)
         root_xo = UsdGeom.Xformable(root)
         root_t = Gf.Vec3d(0.0)
         t_op = root_xo.GetTranslateOp()

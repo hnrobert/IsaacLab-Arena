@@ -552,11 +552,12 @@ class G1DDriver:
     def forward_line(
         self,
         dist: float,
-        target_y: float,
+        target_y: float = None,
         speed: float = 0.25,
         arm_hold=None,
         timeout: float = 60.0,
         lat_cap: float = 0.15,
+        target_x: float = None,
     ) -> float:
         """Straight FORWARD run along the current heading with gentle
         line-keeping toward target_y, stopping after `dist` metres
@@ -577,15 +578,22 @@ class G1DDriver:
         deadline = timeout / dt
         waited = 0
         x0, y0, yaw0 = self.pose()
-        # anchor to the nearest AISLE AXIS (+-pi / 0), not yaw0:
-        # yaw0 carries the u-turn spin residue (up to 0.15 rad),
-        # which eats the lateral correction before it acts
-        # (observed: 0.62 m slot-y miss on a clean run)
-        axis = math.pi if math.cos(yaw0) < 0.0 else 0.0
+        # anchor to the nearest CARDINAL axis, not yaw0: yaw0 carries
+        # spin residue (up to 0.15 rad) which eats the lateral
+        # correction before it acts. Cardinal (not just +-x): the
+        # inner-slot table approaches run along +-y
+        axis = (round(yaw0 / (math.pi / 2)) % 4) * (math.pi / 2)
         hx, hy = math.cos(axis), math.sin(axis)
-        # lateral correction sign: +1 facing -x, -1 facing +x
-        # (a +corr heading change moves -y in both cases)
-        lat = -math.copysign(1.0, math.cos(yaw0))
+        # lateral channel: world y for x-headings, world x for
+        # y-headings (target_x). Signs derived per heading so a
+        # +corr heading tilt always moves the lateral variable
+        # TOWARD its target
+        if abs(math.cos(axis)) > 0.5:
+            lat_val = lambda x, y: y  # noqa: E731
+            lat_tgt, lat_sign = target_y, -math.copysign(1.0, math.cos(axis))
+        else:
+            lat_val = lambda x, y: x  # noqa: E731
+            lat_tgt, lat_sign = target_x, math.copysign(1.0, math.sin(axis))
         ref_p, ref_t = 0.0, 0
         while waited < deadline:
             x, y, yaw = self.pose()
@@ -598,8 +606,11 @@ class G1DDriver:
                     print(f"fwd-line stalled at prog={prog:.2f}", flush=True)
                     break
                 ref_p, ref_t = prog, waited
-            corr = max(-lat_cap, min(lat_cap, math.atan2(y - target_y, 1.2)))
-            desired = axis + lat * corr
+            if lat_tgt is None:
+                corr = 0.0
+            else:
+                corr = max(-lat_cap, min(lat_cap, math.atan2(lat_val(x, y) - lat_tgt, 1.2)))
+            desired = axis + lat_sign * corr
             # NOTE the drive_to form: err = DESIRED - yaw. The
             # flipped sign is positive feedback - observed the
             # heading diverge 0.8 rad and wander a meter off-line
