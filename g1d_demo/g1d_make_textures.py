@@ -12,9 +12,9 @@ board). Run inside the container:
        g1d_demo/g1d_make_textures.py"
 """
 
+import numpy as np
 import os
 
-import numpy as np
 from PIL import Image, ImageDraw
 from pxr import Usd
 
@@ -67,11 +67,33 @@ def sign():
     text = Image.new("RGB", (S, S), (0, 0, 0))
     dr = ImageDraw.Draw(text)
     if not flip:  # v=1 (image top) = +z: arrow points up
-        dr.polygon([(S // 2, 30), (S - 130, 240), (S // 2 + 60, 240), (S // 2 + 60, 420), (S // 2 - 60, 420), (S // 2 - 60, 240), (130, 240)], fill=WHITE)
+        dr.polygon(
+            [
+                (S // 2, 30),
+                (S - 130, 240),
+                (S // 2 + 60, 240),
+                (S // 2 + 60, 420),
+                (S // 2 - 60, 420),
+                (S // 2 - 60, 240),
+                (130, 240),
+            ],
+            fill=WHITE,
+        )
         for yy in (360, 420):
             dr.rectangle([S // 2 - 90, yy - 26, S // 2 + 90, yy + 2], fill=WHITE)
     else:  # v=1 = -z: mirror vertically
-        dr.polygon([(S // 2, S - 30), (S - 130, S - 240), (S // 2 + 60, S - 240), (S // 2 + 60, S - 420), (S // 2 - 60, S - 420), (S // 2 - 60, S - 240), (130, S - 240)], fill=WHITE)
+        dr.polygon(
+            [
+                (S // 2, S - 30),
+                (S - 130, S - 240),
+                (S // 2 + 60, S - 240),
+                (S // 2 + 60, S - 420),
+                (S // 2 - 60, S - 420),
+                (S // 2 - 60, S - 240),
+                (130, S - 240),
+            ],
+            fill=WHITE,
+        )
         for yy in (S - 360, S - 420):
             dr.rectangle([S // 2 - 90, S - yy - 2, S // 2 + 90, S - yy + 26], fill=WHITE)
     text.save(os.path.join(TEX, "AisleSign_Text_01.png"))

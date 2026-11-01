@@ -11,7 +11,6 @@ runs, closed corners) looks right:
 
 import argparse
 import math
-import os
 
 from isaaclab.app import AppLauncher
 
@@ -24,8 +23,7 @@ simulation_app = app_launcher.app
 """Now the sim is alive."""
 
 import isaaclab.sim as sim_utils
-import torch
-from g1d_scene import build_warehouse_props, rotate_props, usd_prop_cfg
+from g1d_scene import build_warehouse_props, rotate_props
 from g1d_usd import bind_placeholder_materials
 from isaaclab.assets import AssetBaseCfg
 from isaaclab.scene import InteractiveScene, InteractiveSceneCfg

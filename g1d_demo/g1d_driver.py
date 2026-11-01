@@ -184,7 +184,7 @@ class G1DDriver:
     # seed link for the world snap point (see attach)
     SEED_LINK = "right_hand_middle_1_link"
 
-    def attach(self, tote) -> None:
+    def attach(self, tote, grab_up: float = SNAP_SHIFT_UP) -> None:
         """Snap the tote ONTO the palm and rigidly hold it there.
 
         The world snap point = the SNAP_OFFSET seed (in the
@@ -207,7 +207,10 @@ class G1DDriver:
         yaw = self.pose()[2]
         fwd = np.array([math.cos(yaw), math.sin(yaw), 0.0])
         left = np.array([-math.sin(yaw), math.cos(yaw), 0.0])
-        target = target + np.array([0.0, 0.0, SNAP_SHIFT_UP])
+        # grab_up is PER OBJECT (the catalog): the crate grabs its
+        # HANDLE high so the basket hangs below the palm, the card
+        # boxes grab near their tops, totes use the tuned default
+        target = target + np.array([0.0, 0.0, grab_up])
         target = target + left * SNAP_SHIFT_LEFT - fwd * SNAP_SHIFT_BACK
         rel_p = np.array(quat_rot_inv(quats[link_i], target - pos[link_i]))
         # box quat in the PALM frame: palm_q * rel_q reproduces the
@@ -223,10 +226,11 @@ class G1DDriver:
         self._apply_attach()
         print("  SNAP: tote fixed to the palm", flush=True)
 
-    def arm_capture(self, tote, radius: float = SNAP_RADIUS) -> None:
+    def arm_capture(self, tote, radius: float = SNAP_RADIUS, grab_up: float = SNAP_SHIFT_UP) -> None:
         """Arm the proximity watch: attach fires mid-descent the
-        moment the jaw center comes within `radius` of the tote."""
-        self._capture = (tote, radius)
+        moment the jaw center comes within `radius` of the object;
+        `grab_up` is the per-object palm anchor height."""
+        self._capture = (tote, radius, grab_up)
 
     def disarm_capture(self) -> None:
         self._capture = None
@@ -235,10 +239,10 @@ class G1DDriver:
         c = self._capture
         if c is None or self._attach is not None:
             return
-        tote, radius = c
+        tote, radius, grab_up = c
         tp = n(tote.data.root_pos_w)[0]
         if float(np.linalg.norm(self.hand_center() - tp)) < radius:
-            self.attach(tote)
+            self.attach(tote, grab_up=grab_up)
 
     def detach(self) -> None:
         """Release the tote: it simply keeps its last pose and
@@ -546,7 +550,13 @@ class G1DDriver:
         return False
 
     def forward_line(
-        self, dist: float, target_y: float, speed: float = 0.25, arm_hold=None, timeout: float = 60.0
+        self,
+        dist: float,
+        target_y: float,
+        speed: float = 0.25,
+        arm_hold=None,
+        timeout: float = 60.0,
+        lat_cap: float = 0.15,
     ) -> float:
         """Straight FORWARD run along the current heading with gentle
         line-keeping toward target_y, stopping after `dist` metres
@@ -557,8 +567,11 @@ class G1DDriver:
         the waypoint (observed: circled at 0.11 m for a full
         timeout, then flipped heading into the station). Here the
         stop is progress along a locked heading - nothing to orbit,
-        and the +/-0.12 rad line correction cannot flip the heading.
-        Returns the along-track distance actually covered.
+        and the small line correction cannot flip the heading.
+        lat_cap steepens the correction (rad) - the table-grid
+        approach/exit diagonals pass 0.7 (they must close up to
+        1.25 m of y over the runway while staying below the table
+        band). Returns the along-track distance covered.
         """
         dt = self.sim.get_physics_dt()
         deadline = timeout / dt
@@ -585,7 +598,7 @@ class G1DDriver:
                     print(f"fwd-line stalled at prog={prog:.2f}", flush=True)
                     break
                 ref_p, ref_t = prog, waited
-            corr = max(-0.15, min(0.15, math.atan2(y - target_y, 1.2)))
+            corr = max(-lat_cap, min(lat_cap, math.atan2(y - target_y, 1.2)))
             desired = axis + lat * corr
             # NOTE the drive_to form: err = DESIRED - yaw. The
             # flipped sign is positive feedback - observed the
