@@ -66,8 +66,8 @@ class ObjSceneCfg(InteractiveSceneCfg):
         spawn=sim_utils.PinholeCameraCfg(focal_length=24.0),
         offset=CameraCfg.OffsetCfg(
             # over the first stocked table's slots, looking down
-            pos=(-11.2, -2.4, 2.0),
-            rot=lookat_quat_xyzw((-11.2, -2.4, 2.0), (-11.5, -1.0, 0.75), up=(0.0, 1.0, 0.0)),
+            pos=(-8.5, -2.6, 1.05),
+            rot=lookat_quat_xyzw((-8.5, -2.6, 1.05), (-8.5, -1.45, 0.78), up=(0.0, 0.0, 1.0)),
             convention="opengl",
         ),
     )
@@ -83,6 +83,8 @@ def main() -> None:
     rigidify_objects()  # USD props need rigid bodies before reset
     bind_object_materials()
     sim.reset()
+    for _ in range(120):  # 2 s: objects drop and rest
+        sim.step()
     for _ in range(10):
         sim.render()
     cam = scene["cam"]

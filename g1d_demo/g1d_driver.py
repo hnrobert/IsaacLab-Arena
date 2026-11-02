@@ -648,7 +648,12 @@ def reset_tote(tote, pos) -> None:
     try:
         dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         tote.write_root_pose_to_sim(
-            torch.tensor([[pos[0], pos[1], pos[2], 1.0, 0.0, 0.0, 0.0]], dtype=torch.float32, device=dev)
+            # IDENTITY quat in the API's xyzw order = (0,0,0,1).
+            # The old (1,0,0,0) is a 180-deg flip about X: invisible
+            # on the cubes this was written for, but it turned every
+            # teleported MUG upside-down - base on the table, body
+            # through it (user: 倒置嵌入下面)
+            torch.tensor([[pos[0], pos[1], pos[2], 0.0, 0.0, 0.0, 1.0]], dtype=torch.float32, device=dev)
         )
     except Exception as exc:  # noqa: BLE001
         print(f"tote reset failed: {exc}", flush=True)
